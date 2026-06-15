@@ -117,3 +117,14 @@ app.*.symbols
 !**/ios/**/default.perspectivev3
 !/packages/flutter_tools/test/data/dart_dependencies_test/**/.packages
 !/dev/ci/**/Gemfile.lock
+
+# Varie
+# Claude session, history, and cache
+.claude/
+.claude/settings.local.json
+
+# Claude local instruction files
+CLAUDE.local.md
+CLAUDE.md
+
+
