@@ -124,7 +124,7 @@ app.*.symbols
 .claude/settings.local.json
 
 # Claude local instruction files
-CLAUDE.local.md
-CLAUDE.md
+claude.local.md
+claude.md
 
 
