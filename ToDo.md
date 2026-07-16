@@ -27,19 +27,19 @@
 - [x] **Valutazione catena detection→OCR** (2026-07-15, `docs/catena-detection-ocr.md`): YOLOv8n (AGPL + training custom) e MobileNetV3-SSDLite (training custom) scartati — detection risolta con **ML Kit Document Scanner** (~0 MB, Play Services, plugin verificato v0.5.0); PaddleOCR scartato come motore principale (~35-40 MB + integrazione nativa senza plugin Flutter) — utile solo per il cirillico → mitigazione via Claude API, eventuale v1.1; **ML Kit Text Recognition v2 confermato**
 - [x] Aggiornati `ToDo.md` fase 4/5/8 e `Specifiche.md` in base ai verdetti
 
-**0b — Setup progetto**
-- [ ] `flutter create` (org, nome pacchetto) nel repo; target Android; `minSdkVersion 33`, `compileSdk 35`, `ndkVersion "27.0.12077973"` in `android/app/build.gradle`
-- [ ] `.gitignore` Flutter completo (build/, .dart_tool/, ecc.)
-- [ ] `analysis_options.yaml` con `flutter_lints`
-- [ ] Struttura cartelle `lib/` come da `Specifiche.md` (core/, data/, services/, ui/) — file placeholder minimi
-- [ ] `lib/version.dart` con costante versione app
-- [ ] Tema Material 3 in `core/theme/app_theme.dart`: token colore, Plus Jakarta Sans (`google_fonts`), Material Symbols Rounded — dal Design System in `Specifiche.md`
-- [ ] Dipendenze fase 0-2 aggiunte con `flutter pub add` (versioni più recenti compatibili)
+**0b — Setup progetto** ✅ 2026-07-16
+- [x] `flutter create` (org `it.lucabusi`, pacchetto `nota_spese`) nel repo; target Android; `minSdk 33`, `compileSdk 35`, `ndkVersion "27.0.12077973"` in `android/app/build.gradle.kts`
+- [x] `.gitignore` Flutter completo (build/, .dart_tool/, ecc.)
+- [x] `analysis_options.yaml` con `flutter_lints`
+- [x] Struttura cartelle `lib/` come da `Specifiche.md` (core/, data/, services/, ui/) — placeholder `.gitkeep`
+- [x] `lib/version.dart` con costante versione app (0.1.0, allineata a `pubspec.yaml`)
+- [x] Tema Material 3 in `core/theme/app_theme.dart`: token colore, Plus Jakarta Sans (`google_fonts`), Material Symbols Rounded — dal Design System in `Specifiche.md`
+- [x] Dipendenze fase 0-2 aggiunte con `flutter pub add` (sqflite, path_provider, intl, google_fonts, material_symbols_icons, dev: sqflite_common_ffi)
 
 **Verifica fase 0**
 - [x] `docs/fattibilita-ia-locale.md` esiste con verdetto GO/NO-GO motivato
-- [ ] `flutter analyze` → zero issue
-- [ ] App vuota con tema si compila e parte su emulatore
+- [x] `flutter analyze` → zero issue (2026-07-16; `flutter test` smoke test verde)
+- [ ] App vuota con tema si compila e parte su emulatore — **SKIP esplicito** su questa macchina (SDK Android incompleto + JDK 11, vedi gotcha in `CLAUDE.md`); da verificare appena l'ambiente è completo
 
 ## Fase 1 — Data layer ▢
 - [ ] Modelli `Trasferta`, `Spesa`, `Foto` (fromMap/toMap, campi come da DDL in `Specifiche.md`)
