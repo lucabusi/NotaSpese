@@ -22,9 +22,10 @@
 | `material_symbols_icons` | icone Material Symbols Rounded | 0 (tema in 0b) |
 | `google_mlkit_document_scanner` | detection/crop/deskew scontrino (Play Services, ~0 MB) | 4 |
 | `image_picker` | scatto foto / galleria (percorso di riserva) | 4 |
-| `image_cropper` | crop + rotazione | 4 |
-| `flutter_image_compress` | compressione JPG + thumbnail | 4 |
-| `permission_handler` | permessi runtime API 33+ | 4 |
+| `image_cropper` | crop + rotazione — **rimandato** (lo scanner croppa gia; aggancio previsto) | 4 |
+| `image` | compressione JPG + thumbnail (pure Dart, testabile su host — sostituisce `flutter_image_compress`, deciso in fase 4) | 4 |
+| `share_plus` | share sheet (viewer foto, export) — anticipato dalla fase 7 | 4 |
+| `permission_handler` | **non usato in v1.0**: scanner = UI Play Services (no permessi in-app), `image_picker` gestisce CAMERA da se; permessi dichiarati nel manifest | 4 |
 | `file_picker` | selezione zip per restore + destinazione backup (SAF) | 8 |
 | `google_mlkit_text_recognition` | OCR offline (default) | 5 |
 | `flutter_gemma` | IA locale: Gemma 3 1B on-device (vedi studio fattibilità) | 5 |
@@ -333,7 +334,7 @@ CREATE TABLE foto (
 ### 2. Gestione File Foto
 - **Directory:** configurabile dall'utente nella schermata Impostazioni (default: storage interno app). La scelta viene salvata in `SharedPreferences`.
 - ⚠️ **Vincolo directory (scoped storage):** su Android 13+ una directory arbitraria esterna implica SAF/`content://` URI (niente path file diretti, gestione permessi persistenti). Per v1.0 limitare la scelta a: storage interno app (`getApplicationDocumentsDirectory()`) o external app-specific (`getExternalFilesDir()`) — entrambe con path reali e senza permessi extra. Directory arbitrarie via SAF → v1.1 se serve.
-- **Compressione:** ogni foto viene compressa in JPG (qualità configurabile in Impostazioni, **default 70%**, max 1920px lato lungo) con `flutter_image_compress` prima del salvataggio su disco. L'originale non viene conservato. Il cambio qualità vale solo per le foto nuove (nessuna ricompressione retroattiva).
+- **Compressione:** ogni foto viene compressa in JPG (qualità configurabile in Impostazioni, **default 70%**, max 1920px lato lungo) con il package `image` (pure Dart, decisione fase 4: pipeline unit-testabile senza device) prima del salvataggio su disco. L'originale non viene conservato. Il cambio qualità vale solo per le foto nuove (nessuna ricompressione retroattiva).
 - **Thumbnail:** generato contestualmente alla compressione (300px), salvato in sottocartella `thumbnails/`.
 - **Cancellazione:** alla rimozione di una spesa, tutti i file foto e thumbnail associati vanno eliminati dal filesystem prima di cancellare il record DB. La sequenza è: cancella spesa da interfaccia → cancella file fisici → cancella record `foto` → cancella record `spesa`.
 

@@ -8,12 +8,17 @@ import 'package:nota_spese/data/db/db_helper.dart';
 import 'package:nota_spese/data/repositories/foto_repository.dart';
 import 'package:nota_spese/data/repositories/spesa_repository.dart';
 import 'package:nota_spese/data/repositories/trasferta_repository.dart';
+import 'package:nota_spese/services/photo/photo_service.dart';
+import 'package:nota_spese/services/photo/receipt_capture_service.dart';
+import 'package:nota_spese/services/settings/settings_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
   setUpAll(sqfliteFfiInit);
 
   testWidgets('App builds and shows the shell', (WidgetTester tester) async {
+    SharedPreferences.setMockInitialValues({});
     // No-isolate factory: see trasferta_detail_screen_test.dart.
     final dbHelper = DbHelper(
         factory: databaseFactoryFfiNoIsolate, path: inMemoryDatabasePath);
@@ -26,6 +31,10 @@ void main() {
     await tester.pumpWidget(NotaSpeseApp(
       trasfertaRepository: trasfertaRepo,
       spesaRepository: spesaRepo,
+      fotoRepository: fotoRepo,
+      photoService: PhotoService(SettingsService(),
+          basePathProvider: () async => Directory.systemTemp.path),
+      captureService: ReceiptCaptureService(),
     ));
     await tester.pumpAndSettle();
 

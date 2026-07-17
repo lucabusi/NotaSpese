@@ -69,33 +69,33 @@
 - [ ] Creare/modificare/archiviare/eliminare una trasferta su emulatore senza crash — **SKIP esplicito** (ambiente Android incompleto, vedi gotcha in `CLAUDE.md`); compensato da widget test del flusso completo (crea/modifica/archivia/elimina, 2026-07-17)
 - [x] `flutter analyze` zero issue, test fase 1 ancora verdi (69 test totali, 2026-07-17)
 
-## Fase 3 — Spese (inserimento manuale) ▢
-- [ ] Bottom sheet FAB `+`: "📷 Scatta scontrino" (disabilitato fino a fase 4/5) / "✏️ Inserimento manuale"
-- [ ] Form spesa: importo originale + valuta, importo EUR opzionale, categoria chip-select, data (default oggi, date picker), fornitore, note
-- [ ] Tastiera numerica custom (griglia 3×4) per importi
-- [ ] `currency_picker.dart` searchable: filtro testo, valute frequenti in cima (EUR, USD, JPY, GBP, CHF, RSD, AED, SGD)
-- [ ] Salvataggio/modifica/eliminazione spesa (con conferma)
-- [ ] Dettaglio trasferta completo: spese raggruppate per data, totali per categoria con barre, totale live
-- [ ] Unit test: calcolo totali per categoria e formattazione importi
+## Fase 3 — Spese (inserimento manuale) ✅ 2026-07-17
+- [x] Bottom sheet FAB `+`: "📷 Scatta scontrino" (disabilitato fino a fase 4/5) / "✏️ Inserimento manuale"
+- [x] Form spesa: importo originale + valuta, importo EUR opzionale, categoria chip-select, data (default oggi, date picker), fornitore, note — nota: per valuta EUR il campo EUR è nascosto e `importo_eur = importo` (campo manuale solo per valute estere)
+- [x] Tastiera numerica custom (griglia 3×4) per importi
+- [x] `currency_picker.dart` searchable: filtro testo, valute frequenti in cima (EUR, USD, JPY, GBP, CHF, RSD, AED, SGD)
+- [x] Salvataggio/modifica/eliminazione spesa (con conferma)
+- [x] Dettaglio trasferta completo: spese raggruppate per data, totali per categoria con barre, totale live
+- [x] Unit test: calcolo totali per categoria e formattazione importi
 
 **Verifica fase 3**
-- [ ] Flusso completo su emulatore: nuova spesa manuale → appare in lista → totali aggiornati → modifica → elimina
-- [ ] `flutter test` + `flutter analyze` verdi
+- [ ] Flusso completo su emulatore: nuova spesa manuale → appare in lista → totali aggiornati → modifica → elimina — **SKIP esplicito** (ambiente Android incompleto, vedi gotcha in `CLAUDE.md`); compensato da widget test end-to-end del flusso (crea/modifica/elimina, 2026-07-17)
+- [x] `flutter test` + `flutter analyze` verdi (89 test, 2026-07-17)
 
-## Fase 4 — Foto scontrino ▢
-- [ ] Permessi runtime API 33+ (`CAMERA`, `READ_MEDIA_IMAGES`) in `AndroidManifest.xml` + richiesta a runtime; gestire rifiuto con messaggio
-- [ ] Flusso camera: **ML Kit Document Scanner** (`google_mlkit_document_scanner`, detection+crop+deskew automatici via Play Services, no permesso camera in-app) come percorso principale; `image_picker` → anteprima come riserva (API scanner in beta); pulsante "✎ Edit" opzionale → `image_cropper` (ritocco manuale)
-- [ ] Punto di aggancio previsto per plugin contrast/brightness (future option v1.1) nel flusso camera
-- [ ] `settings_service.dart` **minimale** (nasce qui, non in fase 8): qualità JPG + directory foto su `SharedPreferences` — la schermata Impostazioni completa arriva in fase 8, ma il service serve già a `photo_service.dart`
-- [ ] `photo_service.dart`: compressione JPG (qualità letta da `SettingsService`, default 70%, max 1920px lato lungo) + thumbnail 300px in `thumbnails/` — originale non conservato
-- [ ] Directory foto: default storage interno app; configurabile in Impostazioni ma limitata a directory app-specific in v1.0 (vincolo scoped storage, `Specifiche.md` §2); path salvati **relativi** alla directory
-- [ ] Form spesa: thumbnail foto se presente / area "Aggiungi foto" se assente; aggiunta foto anche a spesa manuale esistente
-- [ ] Viewer foto fullscreen: zoom, share, elimina (con conferma)
-- [ ] Eliminazione coerente: rimozione spesa → file foto+thumbnail eliminati prima dei record (già nel repository, verifica end-to-end)
+## Fase 4 — Foto scontrino ✅ 2026-07-17
+- [x] Permessi API 33+ (`CAMERA`, `READ_MEDIA_IMAGES`) dichiarati in `AndroidManifest.xml`; richiesta runtime delegata ai plugin (scanner = UI Play Services senza permessi in-app; `image_picker` gestisce CAMERA da sé) — `permission_handler` non necessario in v1.0; rifiuto/annullo → ritorno `null`, flusso interrotto senza crash
+- [x] Flusso camera: **ML Kit Document Scanner** come percorso principale (fallback automatico a `image_picker` camera su eccezione); `image_picker` camera/galleria selezionabili dal form ("Aggiungi foto"); pulsante "✎ Edit" / `image_cropper` **rimandato** (lo scanner croppa già; aggancio previsto)
+- [x] Punto di aggancio previsto per plugin contrast/brightness (future option v1.1) nel flusso camera (`receipt_capture_service.dart`, commento `[NON-BLOCKING]`)
+- [x] `settings_service.dart` **minimale**: qualità JPG (50-90, default 70) + directory foto su `SharedPreferences`
+- [x] `photo_service.dart`: compressione JPG (qualità da `SettingsService`, default 70%, max 1920px lato lungo, mai upscale) + thumbnail 300px in `thumbnails/` — originale non conservato; package **`image`** (pure Dart) al posto di `flutter_image_compress` → pipeline unit-testata su host
+- [x] Directory foto: default storage interno app (`<documents>/foto`), scelta internal/external in `SettingsService` (UI in fase 8); path salvati **relativi** con separatore `/`
+- [x] Form spesa: thumbnail foto se presente (tap → viewer) / area "Aggiungi foto" se assente; aggiunta foto anche a spesa manuale esistente; foto sostituibile/rimovibile
+- [x] Viewer foto fullscreen: zoom (`InteractiveViewer`), share (`share_plus`), elimina (con conferma)
+- [x] Eliminazione coerente: rimozione spesa → file foto+thumbnail eliminati prima dei record — verificata end-to-end (unit test controller + widget test flusso completo); file lockati/mancanti tollerati (mai bloccare l'eliminazione)
 
 **Verifica fase 4**
-- [ ] Su dispositivo/emulatore con camera: scatto → crop → salva → thumbnail in lista → viewer → elimina spesa → file spariti dal filesystem
-- [ ] `flutter analyze` + test verdi
+- [ ] Su dispositivo/emulatore con camera: scatto → crop → salva → thumbnail in lista → viewer → elimina spesa → file spariti dal filesystem — **SKIP esplicito** (ambiente Android incompleto, vedi gotcha in `CLAUDE.md`); compensato da widget test e2e con capture fake (scatta→preview→salva→thumb in lista→elimina→file rimossi, 2026-07-17); API Document Scanner (beta) da verificare al primo build su device
+- [x] `flutter analyze` + test verdi (102 test, 2026-07-17)
 
 ## Fase 5 — OCR + parser multilingua ▢
 - [ ] Interfaccia `OcrService` unica (input immagine → testo grezzo); i chiamanti non conoscono il motore

@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 
 import 'core/theme/app_theme.dart';
+import 'data/repositories/foto_repository.dart';
 import 'data/repositories/spesa_repository.dart';
 import 'data/repositories/trasferta_repository.dart';
+import 'services/photo/photo_service.dart';
+import 'services/photo/receipt_capture_service.dart';
 import 'ui/shell/home_shell.dart';
 
 class NotaSpeseApp extends StatelessWidget {
@@ -10,10 +13,16 @@ class NotaSpeseApp extends StatelessWidget {
     super.key,
     required this.trasfertaRepository,
     required this.spesaRepository,
+    required this.fotoRepository,
+    required this.photoService,
+    required this.captureService,
   });
 
   final TrasfertaRepository trasfertaRepository;
   final SpesaRepository spesaRepository;
+  final FotoRepository fotoRepository;
+  final PhotoService photoService;
+  final ReceiptCaptureService captureService;
 
   @override
   Widget build(BuildContext context) {
@@ -23,6 +32,9 @@ class NotaSpeseApp extends StatelessWidget {
       home: HomeShell(
         trasfertaRepository: trasfertaRepository,
         spesaRepository: spesaRepository,
+        fotoRepository: fotoRepository,
+        photoService: photoService,
+        captureService: captureService,
       ),
     );
   }

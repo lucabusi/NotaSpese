@@ -3,8 +3,11 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/formatters.dart';
+import '../../data/repositories/foto_repository.dart';
 import '../../data/repositories/spesa_repository.dart';
 import '../../data/repositories/trasferta_repository.dart';
+import '../../services/photo/photo_service.dart';
+import '../../services/photo/receipt_capture_service.dart';
 import '../shared/widgets/trip_card.dart';
 import 'trasferta_detail_controller.dart';
 import 'trasferta_detail_screen.dart';
@@ -19,11 +22,17 @@ class TrasferteListScreen extends StatefulWidget {
     required this.controller,
     required this.trasfertaRepository,
     required this.spesaRepository,
+    required this.fotoRepository,
+    required this.photoService,
+    required this.captureService,
   });
 
   final TrasferteListController controller;
   final TrasfertaRepository trasfertaRepository;
   final SpesaRepository spesaRepository;
+  final FotoRepository fotoRepository;
+  final PhotoService photoService;
+  final ReceiptCaptureService captureService;
 
   @override
   State<TrasferteListScreen> createState() => _TrasferteListScreenState();
@@ -49,7 +58,12 @@ class _TrasferteListScreenState extends State<TrasferteListScreen> {
     await Navigator.of(context).push(MaterialPageRoute<bool>(
       builder: (_) => TrasfertaDetailScreen(
         controller: TrasfertaDetailController(
-            trasfertaId, widget.trasfertaRepository, widget.spesaRepository),
+            trasfertaId,
+            widget.trasfertaRepository,
+            widget.spesaRepository,
+            widget.fotoRepository,
+            widget.photoService),
+        captureService: widget.captureService,
       ),
     ));
     await controller.load();

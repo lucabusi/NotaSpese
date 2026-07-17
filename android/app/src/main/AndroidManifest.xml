@@ -1,4 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Fase 4: camera per il percorso di riserva image_picker; media per
+         l'import da galleria (API 33+, ToDo §Fase 4). Lo scanner ML Kit usa
+         la UI di Play Services e non richiede permessi in-app. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <application
         android:label="nota_spese"
         android:name="${applicationName}"

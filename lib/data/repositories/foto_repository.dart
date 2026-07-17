@@ -22,6 +22,17 @@ class FotoRepository {
     return db.insert('foto', foto.toMap());
   }
 
+  /// All photos of a trip's spese (for the detail-list thumbnails).
+  Future<List<Foto>> getByTrasferta(int trasfertaId) async {
+    final db = await _dbHelper.database;
+    final rows = await db.rawQuery(
+        'SELECT foto.* FROM foto '
+        'JOIN spese ON spese.id = foto.spesa_id '
+        'WHERE spese.trasferta_id = ?',
+        [trasfertaId]);
+    return rows.map(Foto.fromMap).toList();
+  }
+
   Future<Foto?> getBySpesa(int spesaId) async {
     final db = await _dbHelper.database;
     final rows = await db.query('foto',
@@ -39,13 +50,19 @@ class FotoRepository {
   }
 
   /// Deletes photo + thumbnail files only (records untouched).
-  /// Missing files are ignored: deletion must never block on them.
+  /// Missing or locked files are ignored: deletion must never block on
+  /// them — an orphan file is recoverable, a half-deleted spesa is not.
   Future<void> deleteFiles(List<Foto> fotos) async {
     final base = await basePathProvider();
     for (final foto in fotos) {
       for (final rel in [foto.filePath, foto.thumbPath]) {
         final file = File(p.join(base, rel));
-        if (file.existsSync()) await file.delete();
+        try {
+          if (file.existsSync()) await file.delete();
+        } on FileSystemException {
+          // [NON-BLOCKING] e.g. Windows file lock while an Image widget
+          // still holds the handle (host tests); never seen on Android.
+        }
       }
     }
   }

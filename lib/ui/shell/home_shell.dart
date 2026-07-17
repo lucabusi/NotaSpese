@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../data/repositories/foto_repository.dart';
 import '../../data/repositories/spesa_repository.dart';
 import '../../data/repositories/trasferta_repository.dart';
+import '../../services/photo/photo_service.dart';
+import '../../services/photo/receipt_capture_service.dart';
 import '../../version.dart';
 import '../trasferte/trasferte_list_controller.dart';
 import '../trasferte/trasferte_list_screen.dart';
@@ -15,10 +18,16 @@ class HomeShell extends StatefulWidget {
     super.key,
     required this.trasfertaRepository,
     required this.spesaRepository,
+    required this.fotoRepository,
+    required this.photoService,
+    required this.captureService,
   });
 
   final TrasfertaRepository trasfertaRepository;
   final SpesaRepository spesaRepository;
+  final FotoRepository fotoRepository;
+  final PhotoService photoService;
+  final ReceiptCaptureService captureService;
 
   @override
   State<HomeShell> createState() => _HomeShellState();
@@ -56,11 +65,17 @@ class _HomeShellState extends State<HomeShell> {
             controller: _attiveController,
             trasfertaRepository: widget.trasfertaRepository,
             spesaRepository: widget.spesaRepository,
+            fotoRepository: widget.fotoRepository,
+            photoService: widget.photoService,
+            captureService: widget.captureService,
           ),
           TrasferteListScreen(
             controller: _archivioController,
             trasfertaRepository: widget.trasfertaRepository,
             spesaRepository: widget.spesaRepository,
+            fotoRepository: widget.fotoRepository,
+            photoService: widget.photoService,
+            captureService: widget.captureService,
           ),
           const _ImpostazioniPlaceholder(),
         ],

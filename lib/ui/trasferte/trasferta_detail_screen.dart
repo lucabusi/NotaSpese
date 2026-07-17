@@ -1,9 +1,14 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../core/constants/categories.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/formatters.dart';
 import '../../data/models/spesa.dart';
+import '../../services/photo/receipt_capture_service.dart';
+import '../spese/spesa_form_screen.dart';
 import 'trasferta_detail_controller.dart';
 import 'trasferta_form_screen.dart';
 
@@ -13,9 +18,11 @@ enum DetailAction { modifica, archivia, ripristina, elimina }
 /// empty until fase 3), FAB placeholder. Pops `true` after archive/delete
 /// so the list screen reloads.
 class TrasfertaDetailScreen extends StatefulWidget {
-  const TrasfertaDetailScreen({super.key, required this.controller});
+  const TrasfertaDetailScreen(
+      {super.key, required this.controller, required this.captureService});
 
   final TrasfertaDetailController controller;
+  final ReceiptCaptureService captureService;
 
   @override
   State<TrasfertaDetailScreen> createState() => _TrasfertaDetailScreenState();
@@ -75,6 +82,115 @@ class _TrasfertaDetailScreenState extends State<TrasfertaDetailScreen> {
     }
   }
 
+  Future<void> _openAddSheet() async {
+    final scelta = await showModalBottomSheet<String>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              key: const Key('sheet-scatta'),
+              leading: const Icon(Symbols.photo_camera),
+              title: const Text('Scatta scontrino'),
+              subtitle: const Text('Scanner con ritaglio automatico'),
+              onTap: () => Navigator.of(context).pop('scatta'),
+            ),
+            ListTile(
+              key: const Key('sheet-manuale'),
+              leading: const Icon(Symbols.edit),
+              title: const Text('Inserimento manuale'),
+              onTap: () => Navigator.of(context).pop('manuale'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (scelta == 'manuale') await _openSpesaForm();
+    if (scelta == 'scatta') {
+      final path = await _captureScatta();
+      if (path != null && mounted) await _openSpesaForm(pendingFoto: path);
+    }
+  }
+
+  /// Main path: ML Kit Document Scanner; picker camera as riserva
+  /// (scanner API in beta / Play Services assenti).
+  Future<String?> _captureScatta() async {
+    try {
+      return await widget.captureService.scanWithDocumentScanner();
+    } catch (_) {
+      return widget.captureService.pickFromCamera();
+    }
+  }
+
+  /// "Aggiungi foto" from inside the form: choose the capture path.
+  Future<String?> _pickFotoSource() async {
+    final scelta = await showModalBottomSheet<String>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              key: const Key('pick-scanner'),
+              leading: const Icon(Symbols.document_scanner),
+              title: const Text('Scanner documenti'),
+              onTap: () => Navigator.of(context).pop('scanner'),
+            ),
+            ListTile(
+              key: const Key('pick-camera'),
+              leading: const Icon(Symbols.photo_camera),
+              title: const Text('Fotocamera'),
+              onTap: () => Navigator.of(context).pop('camera'),
+            ),
+            ListTile(
+              key: const Key('pick-galleria'),
+              leading: const Icon(Symbols.photo_library),
+              title: const Text('Galleria'),
+              onTap: () => Navigator.of(context).pop('galleria'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    try {
+      return switch (scelta) {
+        'scanner' => await widget.captureService.scanWithDocumentScanner(),
+        'camera' => await widget.captureService.pickFromCamera(),
+        'galleria' => await widget.captureService.pickFromGallery(),
+        _ => null,
+      };
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _openSpesaForm({Spesa? spesa, String? pendingFoto}) async {
+    final t = controller.trasferta;
+    if (t == null) return;
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => SpesaFormScreen(
+        trasfertaId: controller.trasfertaId,
+        valutaDefault: t.valutaDefault,
+        initial: spesa,
+        initialFoto: spesa == null ? null : controller.fotoBySpesa[spesa.id],
+        pendingFotoSourcePath: pendingFoto,
+        onPickFoto: _pickFotoSource,
+        photoPathResolver: controller.absolutePhotoPath,
+        onSave: spesa == null
+            ? (s, {nuovaFoto, rimuoviFoto = false}) =>
+                controller.createSpesa(s, fotoSourcePath: nuovaFoto)
+            : (s, {nuovaFoto, rimuoviFoto = false}) => controller.updateSpesa(
+                s, fotoSourcePath: nuovaFoto, rimuoviFoto: rimuoviFoto),
+        onDelete:
+            spesa == null ? null : () => controller.deleteSpesa(spesa.id!),
+      ),
+    ));
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
@@ -104,9 +220,7 @@ class _TrasfertaDetailScreenState extends State<TrasfertaDetailScreen> {
             ],
           ),
           floatingActionButton: FloatingActionButton(
-            onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Inserimento spese: fase 3')),
-            ),
+            onPressed: _openAddSheet,
             child: const Icon(Symbols.add),
           ),
           body: controller.loading && t == null
@@ -115,6 +229,11 @@ class _TrasfertaDetailScreenState extends State<TrasfertaDetailScreen> {
                   padding: const EdgeInsets.all(16),
                   children: [
                     _TotalsHeader(controller: controller),
+                    if (controller.totaliEurPerCategoria.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      _CategoryTotals(
+                          totali: controller.totaliEurPerCategoria),
+                    ],
                     const SizedBox(height: 16),
                     if (controller.speseByData.isEmpty)
                       const Padding(
@@ -134,7 +253,11 @@ class _TrasfertaDetailScreenState extends State<TrasfertaDetailScreen> {
                                 ?.copyWith(color: AppColors.textTertiary),
                           ),
                         ),
-                        for (final spesa in entry.value) _SpesaTile(spesa),
+                        for (final spesa in entry.value)
+                          _SpesaTile(spesa,
+                              thumbPath:
+                                  controller.thumbAbsBySpesa[spesa.id],
+                              onTap: () => _openSpesaForm(spesa: spesa)),
                       ],
                   ],
                 ),
@@ -194,16 +317,91 @@ class _TotalsHeader extends StatelessWidget {
   }
 }
 
-class _SpesaTile extends StatelessWidget {
-  const _SpesaTile(this.spesa);
+/// Per-category EUR totals with proportional bars (mockup "barre").
+class _CategoryTotals extends StatelessWidget {
+  const _CategoryTotals({required this.totali});
 
-  final Spesa spesa;
+  final Map<Categoria, double> totali;
 
   @override
   Widget build(BuildContext context) {
+    final entries = totali.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final max = entries.first.value;
+    final textTheme = Theme.of(context).textTheme;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Totali per categoria (EUR)',
+                style: textTheme.labelMedium
+                    ?.copyWith(color: AppColors.textSecondary)),
+            const SizedBox(height: 8),
+            for (final e in entries)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    Icon(e.key.icon, size: 18, color: AppColors.primary),
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      width: 88,
+                      child: Text(e.key.label, style: textTheme.bodySmall),
+                    ),
+                    Expanded(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(3),
+                        child: LinearProgressIndicator(
+                          value: max == 0 ? 0 : e.value / max,
+                          minHeight: 6,
+                          backgroundColor: AppColors.primaryContainer,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      formatEur(e.value),
+                      style: textTheme.bodySmall?.copyWith(
+                        fontFeatures: amountFontFeatures,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SpesaTile extends StatelessWidget {
+  const _SpesaTile(this.spesa, {this.thumbPath, required this.onTap});
+
+  final Spesa spesa;
+
+  /// Absolute thumbnail path (resolved by the controller), null = no photo.
+  final String? thumbPath;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final thumb = thumbPath;
     return Card(
       child: ListTile(
-        leading: Icon(spesa.categoria.icon, color: AppColors.primary),
+        onTap: onTap,
+        leading: thumb != null
+            ? ClipRRect(
+                key: Key('tile-thumb-${spesa.id}'),
+                borderRadius: BorderRadius.circular(8),
+                child: Image.file(File(thumb),
+                    width: 40, height: 40, fit: BoxFit.cover),
+              )
+            : Icon(spesa.categoria.icon, color: AppColors.primary),
         title: Text(spesa.fornitore ?? spesa.categoria.label),
         subtitle: Text(spesa.categoria.label),
         trailing: Text(

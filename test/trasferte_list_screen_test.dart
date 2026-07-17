@@ -7,9 +7,13 @@ import 'package:nota_spese/data/models/trasferta.dart';
 import 'package:nota_spese/data/repositories/foto_repository.dart';
 import 'package:nota_spese/data/repositories/spesa_repository.dart';
 import 'package:nota_spese/data/repositories/trasferta_repository.dart';
+import 'package:nota_spese/services/photo/photo_service.dart';
+import 'package:nota_spese/services/photo/receipt_capture_service.dart';
+import 'package:nota_spese/services/settings/settings_service.dart';
 import 'package:nota_spese/ui/shared/widgets/trip_card.dart';
 import 'package:nota_spese/ui/trasferte/trasferte_list_controller.dart';
 import 'package:nota_spese/ui/trasferte/trasferte_list_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
@@ -18,12 +22,14 @@ void main() {
   late DbHelper dbHelper;
   late TrasfertaRepository trasfertaRepo;
   late SpesaRepository spesaRepo;
+  late FotoRepository fotoRepo;
 
   setUp(() {
+    SharedPreferences.setMockInitialValues({});
     // No-isolate factory: see trasferta_detail_screen_test.dart.
     dbHelper = DbHelper(
         factory: databaseFactoryFfiNoIsolate, path: inMemoryDatabasePath);
-    final fotoRepo = FotoRepository(dbHelper,
+    fotoRepo = FotoRepository(dbHelper,
         basePathProvider: () async => Directory.systemTemp.path);
     trasfertaRepo = TrasfertaRepository(dbHelper, fotoRepo);
     spesaRepo = SpesaRepository(dbHelper, fotoRepo);
@@ -38,6 +44,10 @@ void main() {
             archiviate: archiviate),
         trasfertaRepository: trasfertaRepo,
         spesaRepository: spesaRepo,
+        fotoRepository: fotoRepo,
+        photoService: PhotoService(SettingsService(),
+            basePathProvider: () async => Directory.systemTemp.path),
+        captureService: ReceiptCaptureService(),
       ),
     ));
     await tester.pumpAndSettle();
