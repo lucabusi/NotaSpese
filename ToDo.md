@@ -41,33 +41,33 @@
 - [x] `flutter analyze` → zero issue (2026-07-16; `flutter test` smoke test verde)
 - [ ] App vuota con tema si compila e parte su emulatore — **SKIP esplicito** su questa macchina (SDK Android incompleto + JDK 11, vedi gotcha in `CLAUDE.md`); da verificare appena l'ambiente è completo
 
-## Fase 1 — Data layer ▢
-- [ ] Modelli `Trasferta`, `Spesa`, `Foto` (fromMap/toMap, campi come da DDL in `Specifiche.md`)
-- [ ] Enum `Categoria` (pranzo·cena·colazione·trasporto·taxi·hotel·parcheggio·carburante·telefono·altro) con icona e label
-- [ ] Enum valute supportate (EUR, JPY, USD, GBP, CHF, RSD, AED, SGD, …) — nessuna API per la lista; no HRK (kuna → EUR dal 2023)
-- [ ] `db_helper.dart`: apertura DB, `PRAGMA foreign_keys = ON` a ogni connessione, creazione schema, versione DB
-- [ ] `TrasfertaRepository`: CRUD + archivia + **delete cascade esplicito in transazione** (file foto → record foto → spese → trasferta)
-- [ ] `SpesaRepository`: CRUD, spese per trasferta raggruppate per data, totali per categoria e totale trasferta (valuta originale + EUR se disponibile)
-- [ ] `FotoRepository`: crea/leggi/elimina record + eliminazione file fisici PRIMA del record
-- [ ] Unit test repository con `sqflite_common_ffi` (CRUD, cascade, totali, FK attive)
+## Fase 1 — Data layer ✅ 2026-07-17
+- [x] Modelli `Trasferta`, `Spesa`, `Foto` (fromMap/toMap, campi come da DDL in `Specifiche.md`)
+- [x] Enum `Categoria` (pranzo·cena·colazione·trasporto·taxi·hotel·parcheggio·carburante·telefono·altro) con icona e label
+- [x] Enum valute supportate (EUR, JPY, USD, GBP, CHF, RSD, AED, SGD, …) — nessuna API per la lista; no HRK (kuna → EUR dal 2023)
+- [x] `db_helper.dart`: apertura DB, `PRAGMA foreign_keys = ON` a ogni connessione, creazione schema, versione DB
+- [x] `TrasfertaRepository`: CRUD + archivia + **delete cascade esplicito in transazione** (file foto → record foto → spese → trasferta)
+- [x] `SpesaRepository`: CRUD, spese per trasferta raggruppate per data, totali per categoria e totale trasferta (valuta originale + EUR se disponibile)
+- [x] `FotoRepository`: crea/leggi/elimina record + eliminazione file fisici PRIMA del record
+- [x] Unit test repository con `sqflite_common_ffi` (CRUD, cascade, totali, FK attive)
 
 **Verifica fase 1**
-- [ ] `flutter test` verde
-- [ ] `flutter analyze` → zero issue
+- [x] `flutter test` verde (39 test, 2026-07-17)
+- [x] `flutter analyze` → zero issue (2026-07-17)
 
-## Fase 2 — Shell UI + CRUD trasferte ▢
-- [ ] `home_shell.dart`: `NavigationBar` 3 tab (Trasferte attive / Archivio / Impostazioni)
-- [ ] Lista trasferte attive: header con totale complessivo €, card trasferta (icona, nome, date, badge valuta, n. spese, totale) — `shared/widgets/trip_card.dart`
-- [ ] Form crea/modifica trasferta: nome, luogo, date, valuta default, lingua default, note
-- [ ] Dettaglio trasferta (scheletro): header totale, lista spese vuota, FAB `+`
-- [ ] Azioni trasferta: archivia / ripristina / elimina (con conferma)
-- [ ] Tab Archivio: lista `archiviata = 1`, badge ARCHIVIATA
-- [ ] Controller `ChangeNotifier` per lista/dettaglio, collegati ai repository
-- [ ] Stati vuoti (nessuna trasferta) con invito all'azione
+## Fase 2 — Shell UI + CRUD trasferte ✅ 2026-07-17
+- [x] `home_shell.dart`: `NavigationBar` 3 tab (Trasferte attive / Archivio / Impostazioni)
+- [x] Lista trasferte attive: header con totale complessivo €, card trasferta (icona, nome, date, badge valuta, n. spese, totale) — `shared/widgets/trip_card.dart`
+- [x] Form crea/modifica trasferta: nome, luogo, date, valuta default, lingua default, note
+- [x] Dettaglio trasferta (scheletro): header totale, lista spese vuota, FAB `+`
+- [x] Azioni trasferta: archivia / ripristina / elimina (con conferma)
+- [x] Tab Archivio: lista `archiviata = 1`, badge ARCHIVIATA
+- [x] Controller `ChangeNotifier` per lista/dettaglio, collegati ai repository
+- [x] Stati vuoti (nessuna trasferta) con invito all'azione
 
 **Verifica fase 2**
-- [ ] Creare/modificare/archiviare/eliminare una trasferta su emulatore senza crash
-- [ ] `flutter analyze` zero issue, test fase 1 ancora verdi
+- [ ] Creare/modificare/archiviare/eliminare una trasferta su emulatore senza crash — **SKIP esplicito** (ambiente Android incompleto, vedi gotcha in `CLAUDE.md`); compensato da widget test del flusso completo (crea/modifica/archivia/elimina, 2026-07-17)
+- [x] `flutter analyze` zero issue, test fase 1 ancora verdi (69 test totali, 2026-07-17)
 
 ## Fase 3 — Spese (inserimento manuale) ▢
 - [ ] Bottom sheet FAB `+`: "📷 Scatta scontrino" (disabilitato fino a fase 4/5) / "✏️ Inserimento manuale"

@@ -1,43 +1,28 @@
 import 'package:flutter/material.dart';
-import 'package:material_symbols_icons/symbols.dart';
 
 import 'core/theme/app_theme.dart';
-import 'version.dart';
+import 'data/repositories/spesa_repository.dart';
+import 'data/repositories/trasferta_repository.dart';
+import 'ui/shell/home_shell.dart';
 
 class NotaSpeseApp extends StatelessWidget {
-  const NotaSpeseApp({super.key});
+  const NotaSpeseApp({
+    super.key,
+    required this.trasfertaRepository,
+    required this.spesaRepository,
+  });
+
+  final TrasfertaRepository trasfertaRepository;
+  final SpesaRepository spesaRepository;
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Nota Spese',
       theme: AppTheme.light(),
-      home: const _PlaceholderHome(),
-    );
-  }
-}
-
-/// Temporary home screen; replaced by HomeShell in phase 2.
-class _PlaceholderHome extends StatelessWidget {
-  const _PlaceholderHome();
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Nota Spese')),
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Symbols.receipt_long_rounded,
-                size: 64, color: AppColors.primary),
-            const SizedBox(height: 16),
-            Text(
-              'Nota Spese v$appVersion',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-          ],
-        ),
+      home: HomeShell(
+        trasfertaRepository: trasfertaRepository,
+        spesaRepository: spesaRepository,
       ),
     );
   }
