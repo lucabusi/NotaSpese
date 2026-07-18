@@ -58,5 +58,6 @@ void main() {
     captureService: captureService,
     orchestrator: orchestrator,
     settingsService: settingsService,
+    apiKeyStore: apiKeyStore,
   ));
 }
