@@ -9,11 +9,17 @@ import '../../core/theme/app_theme.dart';
 import '../../core/utils/formatters.dart';
 import '../../data/models/foto.dart';
 import '../../data/models/spesa.dart';
+import '../../services/ocr/parsed_receipt.dart';
 import '../foto/photo_viewer_screen.dart';
 import '../shared/widgets/category_chips.dart';
 import '../shared/widgets/currency_picker.dart';
 import 'amount_input_controller.dart';
 import 'amount_keypad.dart';
+
+extension _OcrEngineLabel on OcrEngine {
+  /// Banner-facing name (spec: "ML Kit" / "Claude").
+  String get label => this == OcrEngine.claude ? 'Claude' : 'ML Kit';
+}
 
 /// Create/edit expense form. [initial] == null → create; otherwise edit
 /// (id, createdAt, ocrEngine and tassoCambio are preserved). The amount is
@@ -36,6 +42,8 @@ class SpesaFormScreen extends StatefulWidget {
     this.photoPathResolver,
     required this.onSave,
     this.onDelete,
+    this.parsed,
+    this.onRetryOtherEngine,
   });
 
   final int trasfertaId;
@@ -51,19 +59,31 @@ class SpesaFormScreen extends StatefulWidget {
       {String? nuovaFoto, bool rimuoviFoto}) onSave;
   final Future<void> Function()? onDelete;
 
+  /// OCR result from the receipt-capture flow (creation only). Drives the
+  /// initial pre-fill and the confirmation banner.
+  final ParsedReceipt? parsed;
+
+  /// Re-runs recognition with the other engine (null → menu item hidden).
+  final Future<ParsedReceipt?> Function()? onRetryOtherEngine;
+
   @override
   State<SpesaFormScreen> createState() => _SpesaFormScreenState();
 }
 
 class _SpesaFormScreenState extends State<SpesaFormScreen> {
   final _formKey = GlobalKey<FormState>();
-  late String _valuta = widget.initial?.valuta ?? widget.valutaDefault;
+  final DateTime _today = DateTime.now();
+  late String _valuta =
+      widget.initial?.valuta ?? widget.parsed?.valuta ?? widget.valutaDefault;
   late final AmountInputController _importo = AmountInputController(
     decimalDigits: _decimalDigits(_valuta),
-    initial: widget.initial == null
-        ? ''
-        : AmountInputController.initialText(
-            widget.initial!.importo, _decimalDigits(_valuta)),
+    initial: widget.initial != null
+        ? AmountInputController.initialText(
+            widget.initial!.importo, _decimalDigits(_valuta))
+        : (widget.parsed?.importo == null
+            ? ''
+            : AmountInputController.initialText(
+                widget.parsed!.importo!, _decimalDigits(_valuta))),
   );
   late final TextEditingController _importoEur = TextEditingController(
       text: widget.initial?.importoEur
@@ -71,13 +91,16 @@ class _SpesaFormScreenState extends State<SpesaFormScreen> {
               .replaceAll('.', ',') ??
           '');
   late Categoria _categoria = widget.initial?.categoria ?? Categoria.pranzo;
-  late DateTime _data = widget.initial?.data ?? DateTime.now();
-  late final TextEditingController _fornitore =
-      TextEditingController(text: widget.initial?.fornitore ?? '');
+  late DateTime _data = widget.initial?.data ?? widget.parsed?.data ?? _today;
+  late final TextEditingController _fornitore = TextEditingController(
+      text: widget.initial?.fornitore ?? widget.parsed?.fornitore ?? '');
   late final TextEditingController _note =
       TextEditingController(text: widget.initial?.note ?? '');
   late String? _fotoSource = widget.pendingFotoSourcePath;
   bool _rimuoviFoto = false;
+  // Current OCR result shown by the banner; updated wholesale on a
+  // successful "riprova con altro motore" (engine + isEmpty variant).
+  late ParsedReceipt? _currentParsed = widget.parsed;
   // Cached: a fresh Future per build would make FutureBuilder rebuild
   // forever (new future → setState → new build → new future).
   late final Future<String>? _thumbAbsolute = widget.initialFoto == null
@@ -86,6 +109,52 @@ class _SpesaFormScreenState extends State<SpesaFormScreen> {
 
   static int _decimalDigits(String code) =>
       Currency.fromCode(code)?.decimalDigits ?? 2;
+
+  // Baseline values from the ORIGINAL parsed receipt (fixed, never updated
+  // by a retry): "touched" means the current value diverged from these.
+  String get _baseValuta => widget.parsed?.valuta ?? widget.valutaDefault;
+  int get _baseDecimalDigits => _decimalDigits(_baseValuta);
+  String get _baseImportoText => widget.parsed?.importo == null
+      ? ''
+      : AmountInputController.initialText(
+          widget.parsed!.importo!, _baseDecimalDigits);
+  DateTime get _baseData => widget.parsed?.data ?? _today;
+  String get _baseFornitore => widget.parsed?.fornitore ?? '';
+
+  bool get _valutaTouched =>
+      widget.parsed != null && _valuta != _baseValuta;
+  bool get _importoTouched =>
+      widget.parsed != null && _importo.value != _baseImportoText;
+  bool get _dataTouched => widget.parsed != null && _data != _baseData;
+  bool get _fornitoreTouched =>
+      widget.parsed != null && _fornitore.text != _baseFornitore;
+
+  /// "Riprova con altro motore": overwrites only the fields the user has
+  /// NOT touched since the original OCR pre-fill; always refreshes the
+  /// banner (engine + isEmpty variant) on a non-null result.
+  Future<void> _retryOtherEngine() async {
+    final result = await widget.onRetryOtherEngine!.call();
+    if (result == null || !mounted) return;
+    setState(() {
+      if (!_valutaTouched) {
+        _valuta = result.valuta ?? widget.valutaDefault;
+        _importo.decimalDigits = _decimalDigits(_valuta);
+      }
+      if (!_importoTouched) {
+        _importo.value = result.importo == null
+            ? ''
+            : AmountInputController.initialText(
+                result.importo!, _decimalDigits(_valuta));
+      }
+      if (!_dataTouched) {
+        _data = result.data ?? _today;
+      }
+      if (!_fornitoreTouched) {
+        _fornitore.text = result.fornitore ?? '';
+      }
+      _currentParsed = result;
+    });
+  }
 
   @override
   void dispose() {
@@ -147,7 +216,7 @@ class _SpesaFormScreenState extends State<SpesaFormScreen> {
       importoEur: importoEur,
       tassoCambio: initial?.tassoCambio,
       note: _note.text.trim().isEmpty ? null : _note.text.trim(),
-      ocrEngine: initial?.ocrEngine,
+      ocrEngine: initial?.ocrEngine ?? widget.parsed?.engine.name,
       createdAt: initial?.createdAt ?? DateTime.now(),
     );
     await widget.onSave(spesa,
@@ -244,6 +313,50 @@ class _SpesaFormScreenState extends State<SpesaFormScreen> {
     );
   }
 
+  /// Success/warning banner above the amount (OCR pre-fill flow only).
+  Widget? _ocrBanner() {
+    final parsed = _currentParsed;
+    if (parsed == null) return null;
+    final isWarning = parsed.isEmpty;
+    final fg = isWarning ? AppColors.warning : AppColors.success;
+    final bg =
+        isWarning ? AppColors.warningContainer : AppColors.successContainer;
+    final text = isWarning
+        ? 'Nessun dato riconosciuto — inserisci manualmente'
+        : 'Compilato dallo scontrino (${parsed.engine.label}) · verifica i dati';
+    return Container(
+      key: const Key('ocr-banner'),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(AppRadius.field),
+      ),
+      child: Row(
+        children: [
+          Icon(isWarning ? Symbols.warning : Symbols.check_circle,
+              color: fg, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(text,
+                style: TextStyle(color: fg, fontWeight: FontWeight.w600)),
+          ),
+          if (widget.onRetryOtherEngine != null)
+            PopupMenuButton<String>(
+              key: const Key('ocr-riprova'),
+              icon: Icon(Symbols.more_vert, color: fg),
+              onSelected: (_) => _retryOtherEngine(),
+              itemBuilder: (context) => const [
+                PopupMenuItem<String>(
+                  value: 'retry',
+                  child: Text('Riprova con altro motore'),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _elimina() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -269,6 +382,7 @@ class _SpesaFormScreenState extends State<SpesaFormScreen> {
   Widget build(BuildContext context) {
     final editing = widget.initial != null;
     final textTheme = Theme.of(context).textTheme;
+    final ocrBanner = _ocrBanner();
 
     return Scaffold(
       appBar: AppBar(title: Text(editing ? 'Modifica spesa' : 'Nuova spesa')),
@@ -277,6 +391,10 @@ class _SpesaFormScreenState extends State<SpesaFormScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            if (ocrBanner != null) ...[
+              ocrBanner,
+              const SizedBox(height: 12),
+            ],
             ListenableBuilder(
               listenable: _importo,
               builder: (context, _) => Row(

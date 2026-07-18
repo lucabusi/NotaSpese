@@ -6,6 +6,7 @@ import 'package:image/image.dart' as img;
 import 'package:nota_spese/core/constants/categories.dart';
 import 'package:nota_spese/data/models/foto.dart';
 import 'package:nota_spese/data/models/spesa.dart';
+import 'package:nota_spese/services/ocr/parsed_receipt.dart';
 import 'package:nota_spese/ui/spese/spesa_form_screen.dart';
 import 'package:path/path.dart' as p;
 
@@ -48,6 +49,8 @@ void main() {
     Future<String?> Function()? onPickFoto,
     Future<String> Function(String rel)? photoPathResolver,
     bool withDelete = false,
+    ParsedReceipt? parsed,
+    Future<ParsedReceipt?> Function()? onRetryOtherEngine,
   }) async {
     saved = null;
     savedNuovaFoto = null;
@@ -65,6 +68,8 @@ void main() {
               pendingFotoSourcePath: pendingFotoSourcePath,
               onPickFoto: onPickFoto,
               photoPathResolver: photoPathResolver,
+              parsed: parsed,
+              onRetryOtherEngine: onRetryOtherEngine,
               onSave: (s, {nuovaFoto, rimuoviFoto = false}) async {
                 saved = s;
                 savedNuovaFoto = nuovaFoto;
@@ -275,5 +280,98 @@ void main() {
     await tester.pumpAndSettle();
     expect(savedRimuoviFoto, isTrue);
     expect(savedNuovaFoto, isNull);
+  });
+
+  group('OCR pre-fill, banner, retry', () {
+    testWidgets('parsed prefills fields and shows success banner with engine',
+        (tester) async {
+      final parsed = ParsedReceipt(
+        importo: 42.5,
+        valuta: 'USD',
+        data: DateTime(2026, 7, 10),
+        fornitore: 'Hotel Test',
+        engine: OcrEngine.mlkit,
+      );
+      await pumpForm(tester, parsed: parsed);
+
+      expect(find.byKey(const Key('ocr-banner')), findsOneWidget);
+      expect(find.textContaining('ML Kit'), findsOneWidget);
+      expect(find.text('42,5'), findsOneWidget);
+      expect(find.text('USD'), findsOneWidget);
+
+      await scrollTo(tester, find.text('Hotel Test'));
+      expect(find.text('Hotel Test'), findsOneWidget);
+    });
+
+    testWidgets('parsed.isEmpty shows warning banner', (tester) async {
+      const parsed = ParsedReceipt(engine: OcrEngine.claude);
+      await pumpForm(tester, parsed: parsed);
+
+      expect(find.byKey(const Key('ocr-banner')), findsOneWidget);
+      expect(find.textContaining('Nessun dato riconosciuto'), findsOneWidget);
+    });
+
+    testWidgets('no parsed: no banner (regression)', (tester) async {
+      await pumpForm(tester);
+      expect(find.byKey(const Key('ocr-banner')), findsNothing);
+    });
+
+    testWidgets('save persists ocrEngine from parsed engine', (tester) async {
+      final parsed = ParsedReceipt(importo: 10, engine: OcrEngine.mlkit);
+      await pumpForm(tester, parsed: parsed);
+
+      await scrollTo(tester, find.byKey(const Key('salva-spesa')));
+      await tester.tap(find.byKey(const Key('salva-spesa')));
+      await tester.pumpAndSettle();
+
+      expect(saved!.ocrEngine, 'mlkit');
+    });
+
+    testWidgets(
+        'retry with other engine overwrites only untouched fields',
+        (tester) async {
+      final parsed = ParsedReceipt(
+        importo: 20,
+        valuta: 'EUR',
+        data: DateTime(2026, 7, 1),
+        fornitore: 'A',
+        engine: OcrEngine.mlkit,
+      );
+      final retryResult = ParsedReceipt(
+        importo: 99,
+        valuta: 'USD',
+        data: DateTime(2026, 7, 5),
+        fornitore: 'B',
+        engine: OcrEngine.claude,
+      );
+      await pumpForm(
+        tester,
+        parsed: parsed,
+        onRetryOtherEngine: () async => retryResult,
+      );
+
+      expect(find.text('20'), findsOneWidget);
+
+      // Touch importo (user edits it BEFORE retrying).
+      await tester.tap(find.byKey(const Key('key-1')));
+      await tester.pump();
+      expect(find.text('201'), findsOneWidget);
+
+      // Open banner menu and select retry.
+      await tester.tap(find.byKey(const Key('ocr-riprova')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Riprova con altro motore'));
+      await tester.pumpAndSettle();
+
+      // Touched field preserved.
+      expect(find.text('201'), findsOneWidget);
+      // Untouched fields overwritten from retry result.
+      expect(find.text('USD'), findsOneWidget);
+      expect(find.textContaining('Claude'), findsOneWidget);
+
+      await scrollTo(tester, find.text('B'));
+      expect(find.text('B'), findsOneWidget);
+      expect(find.text('A'), findsNothing);
+    });
   });
 }

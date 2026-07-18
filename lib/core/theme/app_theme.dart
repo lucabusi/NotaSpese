@@ -16,6 +16,8 @@ abstract final class AppColors {
   static const Color outlineStrong = Color(0xFFDFE4EC);
   static const Color success = Color(0xFF13935A);
   static const Color successContainer = Color(0xFFE9F7EF);
+  static const Color warning = Color(0xFF9A6700);
+  static const Color warningContainer = Color(0xFFFCF1D6);
   static const Color archivio = Color(0xFF8A8030);
   static const Color archivioContainer = Color(0xFFFBF3DA);
   static const Color surfaceDark = Color(0xFF0A0C11);
