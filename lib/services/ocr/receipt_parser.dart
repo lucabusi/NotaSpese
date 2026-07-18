@@ -53,11 +53,14 @@ double? _rightmostValue(String line, AmountNumberFormat format) {
 bool _containsAny(String lowerLine, List<String> keywords) =>
     keywords.any((k) => lowerLine.contains(k.toLowerCase()));
 
-/// Extracts the total amount from raw OCR [text] using [profile]'s
-/// keywords and number format. Lines matching a negative keyword (e.g.
-/// subtotal, tax, change) are never used as the total, even if they also
-/// contain a total keyword as a substring (e.g. "subtotale" / "totale").
-double? extractAmount(String text, LanguageProfile profile) {
+/// Keyword-tier pass of [extractAmount]: the total amount found on a line
+/// matching one of [profile]'s total keywords (or the following line, OCR
+/// column layout), skipping lines that also match a negative keyword.
+/// Returns `null` if no keyword line yields a value, so the caller knows to
+/// fall back to [_amountViaFallback] — this is also how the parser's scorer
+/// tells the keyword path from the fallback-max path without re-implementing
+/// the matching logic.
+double? _amountViaKeywords(String text, LanguageProfile profile) {
   final lines = text.split('\n');
   final lowerLines = lines.map((l) => l.toLowerCase()).toList();
 
@@ -75,6 +78,15 @@ double? extractAmount(String text, LanguageProfile profile) {
     }
     if (best != null) return best;
   }
+  return null;
+}
+
+/// Fallback-max pass of [extractAmount]: the largest plausible number found
+/// anywhere in [text] outside lines matching one of [profile]'s negative
+/// keywords, used when no total keyword line yields a value.
+double? _amountViaFallback(String text, LanguageProfile profile) {
+  final lines = text.split('\n');
+  final lowerLines = lines.map((l) => l.toLowerCase()).toList();
 
   double? maxPlausible;
   for (var i = 0; i < lines.length; i++) {
@@ -91,6 +103,13 @@ double? extractAmount(String text, LanguageProfile profile) {
   }
   return maxPlausible;
 }
+
+/// Extracts the total amount from raw OCR [text] using [profile]'s
+/// keywords and number format. Lines matching a negative keyword (e.g.
+/// subtotal, tax, change) are never used as the total, even if they also
+/// contain a total keyword as a substring (e.g. "subtotale" / "totale").
+double? extractAmount(String text, LanguageProfile profile) =>
+    _amountViaKeywords(text, profile) ?? _amountViaFallback(text, profile);
 
 const int _maxPlausibleDateAgeDays = 730;
 
@@ -202,37 +221,23 @@ String? inferCurrencyFromText(String text) {
   return null;
 }
 
-/// Whether [text] has a total-keyword line for [profile] that isn't
-/// excluded by a negative keyword — i.e. whether [extractAmount] (if it
-/// found a value) found it via the keyword path rather than fallback-max.
-bool _amountFromKeywordLine(String text, LanguageProfile profile) {
-  final lines = text.split('\n');
-  for (final keyword in profile.totalKeywords) {
-    final kw = keyword.toLowerCase();
-    for (final line in lines) {
-      final lower = line.toLowerCase();
-      if (!lower.contains(kw)) continue;
-      if (_containsAny(lower, profile.negativeKeywords)) continue;
-      return true;
-    }
-  }
-  return false;
-}
-
 /// Scores how well [profile] fits [text], given the already-extracted
-/// [importo]/[data]/[fornitore] for that profile: 2 points if the amount
-/// came from a keyword line, 1 if only via fallback-max, 1 for a plausible
-/// date, 1 for a vendor, +1 if a total keyword appears anywhere in the text.
+/// [importo]/[data]/[fornitore] for that profile and whether [importo] (when
+/// non-null) came from the keyword path ([viaKeyword]) rather than the
+/// fallback-max path: 2 points for a keyword-path amount, 1 for a
+/// fallback-path amount, 1 for a plausible date, 1 for a vendor, +1 if a
+/// total keyword appears anywhere in the text.
 int _scoreProfile(
   String text,
   LanguageProfile profile, {
   double? importo,
+  required bool viaKeyword,
   DateTime? data,
   String? fornitore,
 }) {
   var score = 0;
   if (importo != null) {
-    score += _amountFromKeywordLine(text, profile) ? 2 : 1;
+    score += viaKeyword ? 2 : 1;
   }
   if (data != null) score += 1;
   if (fornitore != null) score += 1;
@@ -279,12 +284,14 @@ class ReceiptParser {
 
       for (final code in _candidateOrder(text, linguaHint)) {
         final profile = languageProfiles[code]!;
-        final importo = extractAmount(text, profile);
+        final viaKeywordAmount = _amountViaKeywords(text, profile);
+        final importo = viaKeywordAmount ?? _amountViaFallback(text, profile);
         final data = extractDate(text, profile);
         final score = _scoreProfile(
           text,
           profile,
           importo: importo,
+          viaKeyword: viaKeywordAmount != null,
           data: data,
           fornitore: fornitore,
         );

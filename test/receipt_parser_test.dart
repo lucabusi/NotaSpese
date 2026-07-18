@@ -287,10 +287,19 @@ void main() {
   });
 
   group('ReceiptParser.parse - language selection', () {
-    test('hint breaks a tie in favor of the hinted profile', () {
-      const text = 'Bar Roma\nTotale € 12,50';
-      final result = ReceiptParser().parse(text, linguaHint: 'it');
-      expect(result.lingua, 'it');
+    test('hint promotes a non-default-first profile out of a genuine tie', () {
+      // No keyword/date/currency signal for any profile -> every profile
+      // scores identically (vendor-only, +1). Without a hint, default map
+      // order ('it' first) breaks the tie; with linguaHint: 'de', 'de' is
+      // tried first and wins the same tie instead. This would fail if
+      // linguaHint were ignored (both calls would return 'it').
+      const text = 'Negozio Alfa';
+
+      final withoutHint = ReceiptParser().parse(text);
+      expect(withoutHint.lingua, 'it');
+
+      final withHint = ReceiptParser().parse(text, linguaHint: 'de');
+      expect(withHint.lingua, 'de');
     });
 
     test('no hint, no script -> default profile order breaks the tie', () {
@@ -312,6 +321,39 @@ void main() {
       expect(result.lingua, 'de');
       expect(result.importo, 55.0);
     });
+
+    test(
+      'regression: keyword line with no adjacent value scores as fallback, '
+      'not keyword (importo still resolved via fallback-max)',
+      () {
+        // "Totale" matches the IT keyword, but neither that line nor the
+        // next has a number -> extractAmount falls back to the plain
+        // "12,50" found elsewhere. The scorer must award 1 point (fallback),
+        // not 2 (keyword), even though a keyword line is present.
+        const text = 'Totale\nGrazie\nArrivederci 12,50';
+        final result = ReceiptParser().parse(text, linguaHint: 'it');
+        expect(result.lingua, 'it');
+        expect(result.importo, 12.5);
+      },
+    );
+
+    test(
+      'regression: fallback-only amount does not get the keyword bonus, '
+      'so a genuine keyword-path amount elsewhere wins',
+      () {
+        // IT's "Totale" keyword line has no adjacent value (real amount
+        // "87,50" is only found via fallback-max, scoring 1 point), while
+        // DE's "Gesamtbetrag" keyword line does have an adjacent value
+        // (scoring 2 points). DE must win outright (score 4 vs 3). Before
+        // the fix, the scorer credited IT's fallback amount as if it came
+        // from the keyword line (wrongly +2), tying DE at 4-4 and letting
+        // the hinted 'it' win the tie instead of the correct 'de'.
+        const text = 'Totale\nNegozio Alfa\nVia Roma 1\nGesamtbetrag 87,50';
+        final result = ReceiptParser().parse(text, linguaHint: 'it');
+        expect(result.lingua, 'de');
+        expect(result.importo, 87.5);
+      },
+    );
   });
 
   group('ReceiptParser.parse - currency cascade', () {
