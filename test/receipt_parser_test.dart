@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nota_spese/services/ocr/language_profiles.dart';
+import 'package:nota_spese/services/ocr/parsed_receipt.dart';
 import 'package:nota_spese/services/ocr/receipt_parser.dart';
 
 void main() {
@@ -240,6 +241,108 @@ void main() {
 
     test('empty text -> null', () {
       expect(extractVendor(''), null);
+    });
+  });
+
+  group('inferCurrencyFromText', () {
+    test('€ -> EUR', () {
+      expect(inferCurrencyFromText('Totale € 45,00'), 'EUR');
+    });
+
+    test('£ -> GBP', () {
+      expect(inferCurrencyFromText('Total £45.00'), 'GBP');
+    });
+
+    test(r'$ -> USD', () {
+      expect(inferCurrencyFromText(r'Total $45.00'), 'USD');
+    });
+
+    test('CHF -> CHF', () {
+      expect(inferCurrencyFromText('Total CHF 45.00'), 'CHF');
+    });
+
+    test('дин. -> RSD', () {
+      expect(inferCurrencyFromText('Ukupno 500 дин.'), 'RSD');
+    });
+
+    test('din -> RSD', () {
+      expect(inferCurrencyFromText('Ukupno 500 din'), 'RSD');
+    });
+
+    test('RSD code -> RSD', () {
+      expect(inferCurrencyFromText('Ukupno 500 RSD'), 'RSD');
+    });
+
+    test('¥ -> JPY', () {
+      expect(inferCurrencyFromText('合計 ¥1000'), 'JPY');
+    });
+
+    test('円 -> JPY', () {
+      expect(inferCurrencyFromText('合計 1000円'), 'JPY');
+    });
+
+    test('no known currency marker -> null', () {
+      expect(inferCurrencyFromText('Total 45.00'), null);
+    });
+  });
+
+  group('ReceiptParser.parse - language selection', () {
+    test('hint breaks a tie in favor of the hinted profile', () {
+      const text = 'Bar Roma\nTotale € 12,50';
+      final result = ReceiptParser().parse(text, linguaHint: 'it');
+      expect(result.lingua, 'it');
+    });
+
+    test('no hint, no script -> default profile order breaks the tie', () {
+      const text = 'Bar Roma\nTotale € 12,50';
+      final result = ReceiptParser().parse(text);
+      expect(result.lingua, 'it');
+    });
+
+    test('JA text without hint is picked via script detection', () {
+      const text = 'レシート\n合計 1,000円';
+      final result = ReceiptParser().parse(text);
+      expect(result.lingua, 'ja');
+      expect(result.importo, 1000.0);
+    });
+
+    test('wrong hint overridden when another profile scores better', () {
+      const text = 'Restaurant\nGesamtbetrag 55,00';
+      final result = ReceiptParser().parse(text, linguaHint: 'it');
+      expect(result.lingua, 'de');
+      expect(result.importo, 55.0);
+    });
+  });
+
+  group('ReceiptParser.parse - currency cascade', () {
+    test('explicit symbol overrides the winning profile default currency', () {
+      const text = 'Ristorante Roma\nTotale \$45,00';
+      final result = ReceiptParser().parse(text, linguaHint: 'it');
+      expect(result.valuta, 'USD');
+    });
+
+    test('EN text without a symbol -> valuta null (form uses trip default)', () {
+      const text = 'Some Shop\nTotal 25.00';
+      final result = ReceiptParser().parse(text, linguaHint: 'en');
+      expect(result.valuta, null);
+    });
+  });
+
+  group('ReceiptParser.parse - robustness', () {
+    test('garbage text with no signal -> isEmpty, no throw', () {
+      const text = '!!!\n@@@\n###';
+      final result = ReceiptParser().parse(text);
+      expect(result.isEmpty, true);
+    });
+
+    test('empty string -> isEmpty, no throw', () {
+      final result = ReceiptParser().parse('');
+      expect(result.isEmpty, true);
+    });
+
+    test('default engine is mlkit', () {
+      final result = ReceiptParser().parse('Bar Roma\nTotale € 12,50');
+      expect(result.engine, OcrEngine.mlkit);
     });
   });
 }

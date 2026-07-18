@@ -1,4 +1,5 @@
 import 'language_profiles.dart';
+import 'parsed_receipt.dart';
 
 /// Matches a run of digits/separators/currency symbols that contains at
 /// least one digit is checked by [parseAmountToken] itself; this pattern
@@ -183,4 +184,130 @@ String? extractVendor(String text) {
     if (!_isVendorNoiseLine(line)) return line;
   }
   return null;
+}
+
+final RegExp _chfPattern = RegExp(r'\bCHF\b', caseSensitive: false);
+final RegExp _rsdPattern = RegExp(r'дин\.?|\bdin\b|\bRSD\b', caseSensitive: false);
+
+/// Infers the ISO 4217 currency from an explicit symbol/code found in raw
+/// OCR [text] (€, £, $, CHF, дин./din/RSD, ¥/円). Returns `null` if none is
+/// present, so the caller falls back to the winning profile's default.
+String? inferCurrencyFromText(String text) {
+  if (text.contains('€')) return 'EUR';
+  if (text.contains('£')) return 'GBP';
+  if (text.contains('\$')) return 'USD';
+  if (_chfPattern.hasMatch(text)) return 'CHF';
+  if (_rsdPattern.hasMatch(text)) return 'RSD';
+  if (text.contains('¥') || text.contains('円')) return 'JPY';
+  return null;
+}
+
+/// Whether [text] has a total-keyword line for [profile] that isn't
+/// excluded by a negative keyword — i.e. whether [extractAmount] (if it
+/// found a value) found it via the keyword path rather than fallback-max.
+bool _amountFromKeywordLine(String text, LanguageProfile profile) {
+  final lines = text.split('\n');
+  for (final keyword in profile.totalKeywords) {
+    final kw = keyword.toLowerCase();
+    for (final line in lines) {
+      final lower = line.toLowerCase();
+      if (!lower.contains(kw)) continue;
+      if (_containsAny(lower, profile.negativeKeywords)) continue;
+      return true;
+    }
+  }
+  return false;
+}
+
+/// Scores how well [profile] fits [text], given the already-extracted
+/// [importo]/[data]/[fornitore] for that profile: 2 points if the amount
+/// came from a keyword line, 1 if only via fallback-max, 1 for a plausible
+/// date, 1 for a vendor, +1 if a total keyword appears anywhere in the text.
+int _scoreProfile(
+  String text,
+  LanguageProfile profile, {
+  double? importo,
+  DateTime? data,
+  String? fornitore,
+}) {
+  var score = 0;
+  if (importo != null) {
+    score += _amountFromKeywordLine(text, profile) ? 2 : 1;
+  }
+  if (data != null) score += 1;
+  if (fornitore != null) score += 1;
+  final lower = text.toLowerCase();
+  if (profile.totalKeywords.any((k) => lower.contains(k.toLowerCase()))) {
+    score += 1;
+  }
+  return score;
+}
+
+/// Candidate profile codes to try, in order: a detected script (ja/sr)
+/// always goes first; else [linguaHint] goes first if it names a known
+/// profile; the remaining profiles follow in [languageProfiles] order.
+List<String> _candidateOrder(String text, String? linguaHint) {
+  final order = <String>[];
+  final script = detectScript(text);
+  if (script != null && languageProfiles.containsKey(script)) {
+    order.add(script);
+  } else if (linguaHint != null && languageProfiles.containsKey(linguaHint)) {
+    order.add(linguaHint);
+  }
+  for (final code in languageProfiles.keys) {
+    if (!order.contains(code)) order.add(code);
+  }
+  return order;
+}
+
+/// Parses raw OCR [text] into a [ParsedReceipt]: tries [LanguageProfile]
+/// candidates (script detection, then [linguaHint], then every other
+/// profile), scores each one's extraction, and keeps the best (ties go to
+/// whichever was tried first). Currency is an explicit symbol/code found in
+/// the text, else the winning profile's default. Any internal failure
+/// yields an empty [ParsedReceipt] rather than throwing. The engine is
+/// always [OcrEngine.mlkit]; callers that used the Claude fallback should
+/// `copyWith(engine: OcrEngine.claude)`.
+class ReceiptParser {
+  ParsedReceipt parse(String text, {String? linguaHint}) {
+    try {
+      final fornitore = extractVendor(text);
+      String? bestCode;
+      var bestScore = -1;
+      double? bestImporto;
+      DateTime? bestData;
+
+      for (final code in _candidateOrder(text, linguaHint)) {
+        final profile = languageProfiles[code]!;
+        final importo = extractAmount(text, profile);
+        final data = extractDate(text, profile);
+        final score = _scoreProfile(
+          text,
+          profile,
+          importo: importo,
+          data: data,
+          fornitore: fornitore,
+        );
+        if (score > bestScore) {
+          bestScore = score;
+          bestCode = code;
+          bestImporto = importo;
+          bestData = data;
+        }
+      }
+
+      final winner = languageProfiles[bestCode]!;
+      return ParsedReceipt(
+        importo: bestImporto,
+        valuta: inferCurrencyFromText(text) ?? winner.defaultCurrency,
+        data: bestData,
+        fornitore: fornitore,
+        lingua: bestCode,
+        engine: OcrEngine.mlkit,
+        rawText: text,
+      );
+    } catch (_) {
+      return ParsedReceipt(engine: OcrEngine.mlkit, rawText: text);
+    }
+  }
 }
