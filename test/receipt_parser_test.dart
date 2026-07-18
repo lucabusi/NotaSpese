@@ -223,6 +223,16 @@ void main() {
       expect(extractVendor(text), null);
     });
 
+    test('hotel line not discarded by tel pattern (word boundary check)', () {
+      const text = 'Hotel Bristol\nVia Roma 1\nCAP 20100';
+      expect(extractVendor(text), 'Hotel Bristol');
+    });
+
+    test('phone line still skipped with Tel. prefix', () {
+      const text = 'Tel. 02 1234567\nTrattoria da Mario\nVia Torino 8';
+      expect(extractVendor(text), 'Trattoria da Mario');
+    });
+
     test('empty text -> null', () {
       expect(extractVendor(''), null);
     });

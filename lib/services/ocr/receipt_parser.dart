@@ -153,7 +153,7 @@ DateTime? extractDate(String text, LanguageProfile profile, {DateTime? now}) {
 
 final RegExp _vendorZipPattern = RegExp(r'\d{5}');
 final RegExp _vendorPIvaPattern = RegExp(r'p\.?\s?iva');
-final RegExp _vendorTelPattern = RegExp(r'tel');
+final RegExp _vendorTelPattern = RegExp(r'\btel\b|\btel[.:]|telefono|telephone|phone');
 final RegExp _vendorUrlPattern = RegExp(r'www\.|http');
 final RegExp _vendorLetterPattern = RegExp(r'\p{L}', unicode: true);
 
