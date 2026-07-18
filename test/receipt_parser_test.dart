@@ -70,6 +70,12 @@ void main() {
       expect(extractAmount(text, languageProfiles['sr']!), 650.0);
     });
 
+    test('SR: Cyrillic Укупно keyword picks value (case-insensitive match)',
+        () {
+      final text = 'Међузбир 500,00\nУкупно 1.250,00';
+      expect(extractAmount(text, languageProfiles['sr']!), 1250.0);
+    });
+
     test('DE: gesamtbetrag keyword picks value', () {
       final text = 'Zwischensumme 10,00\nGesamtbetrag 55,00';
       expect(extractAmount(text, languageProfiles['de']!), 55.0);

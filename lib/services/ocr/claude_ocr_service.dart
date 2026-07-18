@@ -155,9 +155,10 @@ class ClaudeOcrService {
       throw ClaudeOcrException('Risposta Claude senza blocco di testo');
     }
 
-    final rawText = textBlock['text'] as String;
+    late final String rawText;
     Map<String, dynamic> fields;
     try {
+      rawText = textBlock['text'] as String;
       fields = jsonDecode(rawText) as Map<String, dynamic>;
     } on FormatException {
       throw ClaudeOcrException('Campi Claude non decodificabili');

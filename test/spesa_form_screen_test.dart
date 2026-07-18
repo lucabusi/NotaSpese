@@ -405,5 +405,29 @@ void main() {
       expect(find.text('B'), findsOneWidget);
       expect(find.text('A'), findsNothing);
     });
+
+    testWidgets(
+        'save persists ocrEngine from the POST-RETRY result, not the '
+        'original parsed engine', (tester) async {
+      final parsed = ParsedReceipt(importo: 10, engine: OcrEngine.mlkit);
+      final retryResult = ParsedReceipt(importo: 10, engine: OcrEngine.claude);
+      await pumpForm(
+        tester,
+        parsed: parsed,
+        onRetryOtherEngine: () async => retryResult,
+      );
+
+      await tester.tap(find.byKey(const Key('ocr-riprova')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Riprova con altro motore'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Claude'), findsOneWidget);
+
+      await scrollTo(tester, find.byKey(const Key('salva-spesa')));
+      await tester.tap(find.byKey(const Key('salva-spesa')));
+      await tester.pumpAndSettle();
+
+      expect(saved!.ocrEngine, 'claude');
+    });
   });
 }

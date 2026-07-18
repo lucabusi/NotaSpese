@@ -51,6 +51,7 @@ class _FakeOrchestrator extends RecognitionOrchestrator {
   Future<RecognitionResult> Function(String imagePath, OcrEngine engine)?
       recognizeImpl;
   final List<OcrEngine> calls = [];
+  final List<String?> linguaHints = [];
 
   @override
   Future<bool> get claudeAvailable async => claudeAvailableValue;
@@ -62,6 +63,7 @@ class _FakeOrchestrator extends RecognitionOrchestrator {
     String? linguaHint,
   }) {
     calls.add(engine);
+    linguaHints.add(linguaHint);
     return recognizeImpl?.call(imagePath, engine) ??
         Future.value(RecognitionResult(
           receipt: ParsedReceipt(
@@ -348,6 +350,26 @@ void main() {
     await scrollTo(tester, find.byKey(const Key('campo-fornitore')));
     expect(find.text('Bar Roma'), findsOneWidget);
     expect(orchestrator.calls, [OcrEngine.mlkit]);
+  });
+
+  testWidgets(
+      'scatta passes the trasferta linguaDefault as linguaHint to the '
+      'orchestrator', (tester) async {
+    final srId = await trasfertaRepo.insert(Trasferta(
+      nome: 'Beograd',
+      dataInizio: DateTime(2026, 7, 10),
+      linguaDefault: 'sr',
+      createdAt: DateTime(2026, 7, 9),
+    ));
+    final orchestrator = _FakeOrchestrator();
+    await pump(tester, orchestrator: orchestrator, id: srId);
+
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('sheet-scatta')));
+    await tester.pumpAndSettle();
+
+    expect(orchestrator.linguaHints, ['sr']);
   });
 
   testWidgets('annulla during progress: no form opens, back on detail',

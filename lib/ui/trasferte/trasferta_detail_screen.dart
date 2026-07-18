@@ -205,7 +205,8 @@ class _TrasfertaDetailScreenState extends State<TrasfertaDetailScreen> {
   }
 
   /// Scatta → progress fullscreen (annullabile) → form pre-compilato.
-  /// Annullo: la foto scattata viene scartata, si torna al dettaglio.
+  /// Annullo: la foto resta nella cache temporanea del picker (non importata,
+  /// non cancellata esplicitamente: la pulisce il SO), si torna al dettaglio.
   Future<void> _scattaEOcr(OcrEngine engine) async {
     final path = await _captureScatta();
     if (path == null || !mounted) return;
@@ -234,6 +235,10 @@ class _TrasfertaDetailScreenState extends State<TrasfertaDetailScreen> {
       engine = engine == OcrEngine.mlkit ? OcrEngine.claude : OcrEngine.mlkit;
       final result = await widget.orchestrator
           .recognize(path, engine: engine, linguaHint: t?.linguaDefault);
+      // Realign to the ENGINE ACTUALLY USED (a claude→mlkit fallback returns
+      // mlkit even though `engine` requested claude): the next toggle must
+      // start from what was really shown, not from the request.
+      engine = result.receipt.engine;
       if (!mounted) return null;
       _showFallbackSnackbarIfNeeded(result);
       _showCyrillicSnackbarIfNeeded(result, t);

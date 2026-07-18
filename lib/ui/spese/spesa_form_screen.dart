@@ -223,7 +223,7 @@ class _SpesaFormScreenState extends State<SpesaFormScreen> {
       importoEur: importoEur,
       tassoCambio: initial?.tassoCambio,
       note: _note.text.trim().isEmpty ? null : _note.text.trim(),
-      ocrEngine: initial?.ocrEngine ?? widget.parsed?.engine.name,
+      ocrEngine: initial?.ocrEngine ?? _currentParsed?.engine.name,
       createdAt: initial?.createdAt ?? DateTime.now(),
     );
     await widget.onSave(spesa,
