@@ -233,6 +233,11 @@ void main() {
       expect(extractVendor(text), 'Trattoria da Mario');
     });
 
+    test('iPhone Store not discarded by phone pattern (word boundary check)', () {
+      const text = 'iPhone Store\nVia Roma 1\nCAP 20100';
+      expect(extractVendor(text), 'iPhone Store');
+    });
+
     test('empty text -> null', () {
       expect(extractVendor(''), null);
     });
