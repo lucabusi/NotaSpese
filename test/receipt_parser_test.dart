@@ -73,6 +73,11 @@ void main() {
       final text = 'Zwischensumme 10,00\nGesamtbetrag 55,00';
       expect(extractAmount(text, languageProfiles['de']!), 55.0);
     });
+
+    test('DE: gesamtbetrag outranks generic gesamt', () {
+      final text = 'Gesamt 10,00\nGesamtbetrag 55,00';
+      expect(extractAmount(text, languageProfiles['de']!), 55.0);
+    });
   });
 
   group('extractAmount - negative keyword lines excluded', () {

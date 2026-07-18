@@ -84,7 +84,7 @@ final Map<String, LanguageProfile> languageProfiles = {
   ),
   'de': LanguageProfile(
     code: 'de',
-    totalKeywords: ['summe', 'gesamt', 'gesamtbetrag', 'zu zahlen'],
+    totalKeywords: ['summe', 'gesamtbetrag', 'gesamt', 'zu zahlen'],
     negativeKeywords: ['zwischensumme', 'mwst', 'rückgeld', 'bar'],
     datePatterns: [ReceiptDatePattern(_dmyDot, 'dmy')],
     numberFormat: AmountNumberFormat.commaDecimal,
