@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nota_spese/services/ocr/parsed_receipt.dart';
 import 'package:nota_spese/services/settings/settings_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -33,5 +34,26 @@ void main() {
     SharedPreferences.setMockInitialValues({'photo_dir': 'bogus'});
     final s = SettingsService();
     expect(await s.photoDirKind, PhotoDirKind.internal);
+  });
+
+  group('ocrEngineDefault', () {
+    test('default: mlkit when unset', () async {
+      final s = SettingsService();
+      expect(await s.ocrEngineDefault, OcrEngine.mlkit);
+    });
+
+    test('set claude then get returns claude, persisted as "claude"', () async {
+      final s = SettingsService();
+      await s.setOcrEngineDefault(OcrEngine.claude);
+      expect(await s.ocrEngineDefault, OcrEngine.claude);
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString('ocr_engine'), 'claude');
+    });
+
+    test('corrupt stored value falls back to mlkit', () async {
+      SharedPreferences.setMockInitialValues({'ocr_engine': 'local_ai'});
+      final s = SettingsService();
+      expect(await s.ocrEngineDefault, OcrEngine.mlkit);
+    });
   });
 }
