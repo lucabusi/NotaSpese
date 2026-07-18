@@ -127,4 +127,104 @@ void main() {
       expect(extractAmount(text, languageProfiles['en']!), null);
     });
   });
+
+  group('extractDate', () {
+    test('IT: dd/MM/yyyy format extracted', () {
+      final now = DateTime(2026, 7, 18);
+      final text = 'Scontrino\nData: 15/07/2026\nTotale 10,00';
+      expect(
+        extractDate(text, languageProfiles['it']!, now: now),
+        DateTime(2026, 7, 15),
+      );
+    });
+
+    test('EN: MM/dd/yyyy format extracted (day > 12 disambiguates)', () {
+      final now = DateTime(2026, 7, 18);
+      final text = 'Receipt\n07/16/2026\nTotal 25.00';
+      expect(
+        extractDate(text, languageProfiles['en']!, now: now),
+        DateTime(2026, 7, 16),
+      );
+    });
+
+    test('JA: yyyy年M月d日 format extracted', () {
+      final now = DateTime(2026, 7, 18);
+      final text = 'レシート\n2026年7月18日\n合計 1,000円';
+      expect(
+        extractDate(text, languageProfiles['ja']!, now: now),
+        DateTime(2026, 7, 18),
+      );
+    });
+
+    test('DE: dd.MM.yyyy format extracted', () {
+      final now = DateTime(2026, 7, 18);
+      final text = 'Quittung\n17.07.2026\nGesamtbetrag 55,00';
+      expect(
+        extractDate(text, languageProfiles['de']!, now: now),
+        DateTime(2026, 7, 17),
+      );
+    });
+
+    test('future date is rejected, search continues to a plausible one', () {
+      final now = DateTime(2026, 7, 18);
+      final text = 'Data ordine: 01/01/2027\nData scontrino: 10/07/2026';
+      expect(
+        extractDate(text, languageProfiles['it']!, now: now),
+        DateTime(2026, 7, 10),
+      );
+    });
+
+    test('date older than 730 days is rejected', () {
+      final now = DateTime(2026, 7, 18);
+      final text = 'Data: 10/07/2023';
+      expect(extractDate(text, languageProfiles['it']!, now: now), null);
+    });
+
+    test('no date in text -> null', () {
+      final now = DateTime(2026, 7, 18);
+      const text = 'Nessuna data qui';
+      expect(extractDate(text, languageProfiles['it']!, now: now), null);
+    });
+  });
+
+  group('extractVendor', () {
+    test('first clean line returned trimmed', () {
+      const text = '  Bar Centrale  \nVia Roma 1\nCAP 20100';
+      expect(extractVendor(text), 'Bar Centrale');
+    });
+
+    test('P.IVA line skipped, next clean line returned', () {
+      const text = 'P.IVA 12345678901\nRistorante Da Mario\nVia Roma 1';
+      expect(extractVendor(text), 'Ristorante Da Mario');
+    });
+
+    test('phone line skipped', () {
+      const text = 'Tel: 02-1234567\nFarmacia Centrale\nVia Milano 5';
+      expect(extractVendor(text), 'Farmacia Centrale');
+    });
+
+    test('CAP (zip) line skipped', () {
+      const text = '20100 Milano\nSupermercato Alfa\nVia Torino 2';
+      expect(extractVendor(text), 'Supermercato Alfa');
+    });
+
+    test('URL line skipped', () {
+      const text = 'www.negozio.it\nNegozio Beta\nVia Napoli 3';
+      expect(extractVendor(text), 'Negozio Beta');
+    });
+
+    test('line of mostly digits/punctuation skipped', () {
+      const text = '---***---\nCaffetteria Gamma\nVia Torino 9';
+      expect(extractVendor(text), 'Caffetteria Gamma');
+    });
+
+    test('only first 3 non-empty lines considered, all noisy -> null', () {
+      const text = '12345\nTel: 0212345\nwww.site.it\nVendor Name';
+      expect(extractVendor(text), null);
+    });
+
+    test('empty text -> null', () {
+      expect(extractVendor(''), null);
+    });
+  });
 }
