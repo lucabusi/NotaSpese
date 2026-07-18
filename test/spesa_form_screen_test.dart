@@ -316,6 +316,38 @@ void main() {
       expect(find.byKey(const Key('ocr-banner')), findsNothing);
     });
 
+    testWidgets(
+        'retry EUR->JPY: currency-triggered decimal truncation does not '
+        'mask the untouched importo overwrite', (tester) async {
+      final parsed = ParsedReceipt(
+        importo: 20.55,
+        valuta: 'EUR',
+        engine: OcrEngine.mlkit,
+      );
+      final retryResult = ParsedReceipt(
+        importo: 1500,
+        valuta: 'JPY',
+        engine: OcrEngine.claude,
+      );
+      await pumpForm(
+        tester,
+        parsed: parsed,
+        onRetryOtherEngine: () async => retryResult,
+      );
+
+      expect(find.text('20,55'), findsOneWidget);
+
+      // No user interaction: both importo and valuta stay untouched.
+      await tester.tap(find.byKey(const Key('ocr-riprova')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Riprova con altro motore'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('1500'), findsOneWidget);
+      expect(find.text('JPY'), findsOneWidget);
+      expect(find.textContaining('Claude'), findsOneWidget);
+    });
+
     testWidgets('save persists ocrEngine from parsed engine', (tester) async {
       final parsed = ParsedReceipt(importo: 10, engine: OcrEngine.mlkit);
       await pumpForm(tester, parsed: parsed);

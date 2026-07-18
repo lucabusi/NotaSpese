@@ -135,21 +135,28 @@ class _SpesaFormScreenState extends State<SpesaFormScreen> {
   Future<void> _retryOtherEngine() async {
     final result = await widget.onRetryOtherEngine!.call();
     if (result == null || !mounted) return;
+    // Capture BEFORE any mutation: overwriting valuta changes decimalDigits,
+    // which truncates _importo.value in place and would flip a not-yet-read
+    // _importoTouched from false to true (stale value wrongly kept as-is).
+    final valutaTouched = _valutaTouched;
+    final importoTouched = _importoTouched;
+    final dataTouched = _dataTouched;
+    final fornitoreTouched = _fornitoreTouched;
     setState(() {
-      if (!_valutaTouched) {
+      if (!valutaTouched) {
         _valuta = result.valuta ?? widget.valutaDefault;
         _importo.decimalDigits = _decimalDigits(_valuta);
       }
-      if (!_importoTouched) {
+      if (!importoTouched) {
         _importo.value = result.importo == null
             ? ''
             : AmountInputController.initialText(
                 result.importo!, _decimalDigits(_valuta));
       }
-      if (!_dataTouched) {
+      if (!dataTouched) {
         _data = result.data ?? _today;
       }
-      if (!_fornitoreTouched) {
+      if (!fornitoreTouched) {
         _fornitore.text = result.fornitore ?? '';
       }
       _currentParsed = result;
