@@ -21,6 +21,18 @@ import 'package:nota_spese/services/ocr/receipt_parser.dart';
 /// ONLY on the `data` field many months from now, that's fixture decay,
 /// not a parser regression: bump the dates in the affected `.txt` /
 /// `.expected.json` pair to something recent and re-verify.
+///
+/// NOTE (known scoring limitation, `edge/no_total_keyword_ambiguous_signals`):
+/// this fixture has no total keyword in any language and an ambiguous
+/// dot-formatted date (`10.06.2026`), so every profile falls back to
+/// `_amountViaFallback`. With no keyword to anchor the language vote, SR's
+/// dot-date pattern match tips the score in its favor, and SR's
+/// `commaDecimal` format then misparses the English `4.75` price as `475.0`
+/// (currency defaults to RSD too). This is not a bug fix candidate here —
+/// it's the correct, current consequence of a receipt with genuinely no
+/// disambiguating signal — so the fixture intentionally encodes today's
+/// behavior as regression coverage of the limitation rather than the
+/// "human-obvious" answer.
 void main() {
   final fixturesDir = Directory('test/fixtures/receipts');
 
