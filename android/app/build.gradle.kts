@@ -6,7 +6,8 @@ plugins {
 
 android {
     namespace = "it.lucabusi.nota_spese"
-    compileSdk = 35
+    // 36: required by fase-4 plugins (image_picker, mlkit scanner, share_plus).
+    compileSdk = 36
     ndkVersion = "27.0.12077973"
 
     compileOptions {
