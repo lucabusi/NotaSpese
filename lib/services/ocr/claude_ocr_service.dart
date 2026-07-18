@@ -135,6 +135,8 @@ class ClaudeOcrService {
       decoded = jsonDecode(response.body) as Map<String, dynamic>;
     } on FormatException {
       throw ClaudeOcrException('Risposta Claude non decodificabile');
+    } on TypeError {
+      throw ClaudeOcrException('Risposta Claude non decodificabile');
     }
 
     final content = decoded['content'];
@@ -159,18 +161,26 @@ class ClaudeOcrService {
       fields = jsonDecode(rawText) as Map<String, dynamic>;
     } on FormatException {
       throw ClaudeOcrException('Campi Claude non decodificabili');
+    } on TypeError {
+      throw ClaudeOcrException('Campi Claude non decodificabili');
     }
 
-    final dataStr = fields['data'] as String?;
-
-    return ParsedReceipt(
-      importo: (fields['importo'] as num?)?.toDouble(),
-      valuta: fields['valuta'] as String?,
-      data: dataStr == null ? null : DateTime.tryParse(dataStr),
-      fornitore: fields['fornitore'] as String?,
-      lingua: fields['lingua'] as String?,
-      engine: OcrEngine.claude,
-      rawText: rawText,
-    );
+    // Fields that don't match the declared json_schema (e.g. `importo` sent
+    // back as a string) are treated as an API error, not surfaced as a raw
+    // TypeError — spec: docs/superpowers/specs/2026-07-18-fase-5-ocr-parser-design.md.
+    try {
+      final dataStr = fields['data'] as String?;
+      return ParsedReceipt(
+        importo: (fields['importo'] as num?)?.toDouble(),
+        valuta: fields['valuta'] as String?,
+        data: dataStr == null ? null : DateTime.tryParse(dataStr),
+        fornitore: fields['fornitore'] as String?,
+        lingua: fields['lingua'] as String?,
+        engine: OcrEngine.claude,
+        rawText: rawText,
+      );
+    } on TypeError {
+      throw ClaudeOcrException('Campi Claude in formato inatteso');
+    }
   }
 }

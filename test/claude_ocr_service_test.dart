@@ -61,7 +61,7 @@ void main() {
 
     final body = jsonDecode(capturedRequest.body) as Map<String, dynamic>;
     expect(body['model'], 'claude-haiku-4-5');
-    expect(body['max_tokens'], isNotNull);
+    expect(body['max_tokens'], 1024);
 
     final content =
         (body['messages'] as List)[0]['content'] as List<dynamic>;
@@ -73,7 +73,7 @@ void main() {
 
     final textBlock =
         content.firstWhere((b) => (b as Map)['type'] == 'text') as Map;
-    expect(textBlock['text'], contains('it'));
+    expect(textBlock['text'], contains('Lingua probabile dello scontrino: it'));
 
     final format = body['output_config']['format'] as Map;
     expect(format['type'], 'json_schema');
@@ -89,6 +89,63 @@ void main() {
     expect(result.fornitore, 'Bar Roma');
     expect(result.lingua, 'it');
     expect(result.rawText, isNotEmpty);
+  });
+
+  test('does not append a lingua hint when linguaHint is absent', () async {
+    late http.Request capturedRequest;
+    final mockClient = MockClient((request) async {
+      capturedRequest = request;
+      return http.Response(
+        jsonEncode(successResponseJson({
+          'importo': 12.5,
+          'valuta': 'EUR',
+          'data': '2026-07-18',
+          'fornitore': 'Bar Roma',
+          'lingua': 'it',
+        })),
+        200,
+      );
+    });
+
+    final service = ClaudeOcrService(
+      apiKeyProvider: () async => 'sk-test-key-123',
+      client: mockClient,
+    );
+
+    await service.extract(imageFile.path);
+
+    final body = jsonDecode(capturedRequest.body) as Map<String, dynamic>;
+    final content = (body['messages'] as List)[0]['content'] as List<dynamic>;
+    final textBlock =
+        content.firstWhere((b) => (b as Map)['type'] == 'text') as Map;
+    expect(textBlock['text'], isNot(contains('Lingua probabile')));
+  });
+
+  test(
+      'schema-mismatched field (importo as string) throws ClaudeOcrException, '
+      'not a raw TypeError', () async {
+    final mockClient = MockClient((request) async {
+      return http.Response(
+        jsonEncode(successResponseJson({
+          'importo': '12.50', // wrong type per schema (should be number)
+          'valuta': 'EUR',
+          'data': '2026-07-18',
+          'fornitore': 'Bar Roma',
+          'lingua': 'it',
+        })),
+        200,
+      );
+    });
+
+    final service = ClaudeOcrService(
+      apiKeyProvider: () async => 'sk-test-key-123',
+      client: mockClient,
+    );
+
+    await expectLater(
+      () => service.extract(imageFile.path),
+      throwsA(isA<ClaudeOcrException>()),
+    );
   });
 
   test('401 status throws ClaudeOcrException without leaking key or body',
