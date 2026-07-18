@@ -7,6 +7,10 @@ import 'package:nota_spese/data/models/trasferta.dart';
 import 'package:nota_spese/data/repositories/foto_repository.dart';
 import 'package:nota_spese/data/repositories/spesa_repository.dart';
 import 'package:nota_spese/data/repositories/trasferta_repository.dart';
+import 'package:nota_spese/services/ocr/claude_ocr_service.dart';
+import 'package:nota_spese/services/ocr/mlkit_ocr_service.dart';
+import 'package:nota_spese/services/ocr/receipt_parser.dart';
+import 'package:nota_spese/services/ocr/recognition_orchestrator.dart';
 import 'package:nota_spese/services/photo/photo_service.dart';
 import 'package:nota_spese/services/photo/receipt_capture_service.dart';
 import 'package:nota_spese/services/settings/settings_service.dart';
@@ -45,6 +49,13 @@ void main() {
         photoService: PhotoService(SettingsService(),
             basePathProvider: () async => Directory.systemTemp.path),
         captureService: ReceiptCaptureService(),
+        orchestrator: RecognitionOrchestrator(
+          mlkitOcr: MlkitOcrService(),
+          claudeOcr: ClaudeOcrService(apiKeyProvider: () async => null),
+          parser: ReceiptParser(),
+          apiKeyProvider: () async => null,
+        ),
+        settingsService: SettingsService(),
       ),
     ));
     await tester.pumpAndSettle();

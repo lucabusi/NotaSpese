@@ -6,8 +6,10 @@ import '../../core/utils/formatters.dart';
 import '../../data/repositories/foto_repository.dart';
 import '../../data/repositories/spesa_repository.dart';
 import '../../data/repositories/trasferta_repository.dart';
+import '../../services/ocr/recognition_orchestrator.dart';
 import '../../services/photo/photo_service.dart';
 import '../../services/photo/receipt_capture_service.dart';
+import '../../services/settings/settings_service.dart';
 import '../shared/widgets/trip_card.dart';
 import 'trasferta_detail_controller.dart';
 import 'trasferta_detail_screen.dart';
@@ -25,6 +27,8 @@ class TrasferteListScreen extends StatefulWidget {
     required this.fotoRepository,
     required this.photoService,
     required this.captureService,
+    required this.orchestrator,
+    required this.settingsService,
   });
 
   final TrasferteListController controller;
@@ -33,6 +37,8 @@ class TrasferteListScreen extends StatefulWidget {
   final FotoRepository fotoRepository;
   final PhotoService photoService;
   final ReceiptCaptureService captureService;
+  final RecognitionOrchestrator orchestrator;
+  final SettingsService settingsService;
 
   @override
   State<TrasferteListScreen> createState() => _TrasferteListScreenState();
@@ -64,6 +70,8 @@ class _TrasferteListScreenState extends State<TrasferteListScreen> {
             widget.fotoRepository,
             widget.photoService),
         captureService: widget.captureService,
+        orchestrator: widget.orchestrator,
+        settingsService: widget.settingsService,
       ),
     ));
     await controller.load();

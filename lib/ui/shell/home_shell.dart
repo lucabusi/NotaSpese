@@ -4,8 +4,10 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../data/repositories/foto_repository.dart';
 import '../../data/repositories/spesa_repository.dart';
 import '../../data/repositories/trasferta_repository.dart';
+import '../../services/ocr/recognition_orchestrator.dart';
 import '../../services/photo/photo_service.dart';
 import '../../services/photo/receipt_capture_service.dart';
+import '../../services/settings/settings_service.dart';
 import '../../version.dart';
 import '../trasferte/trasferte_list_controller.dart';
 import '../trasferte/trasferte_list_screen.dart';
@@ -21,6 +23,8 @@ class HomeShell extends StatefulWidget {
     required this.fotoRepository,
     required this.photoService,
     required this.captureService,
+    required this.orchestrator,
+    required this.settingsService,
   });
 
   final TrasfertaRepository trasfertaRepository;
@@ -28,6 +32,8 @@ class HomeShell extends StatefulWidget {
   final FotoRepository fotoRepository;
   final PhotoService photoService;
   final ReceiptCaptureService captureService;
+  final RecognitionOrchestrator orchestrator;
+  final SettingsService settingsService;
 
   @override
   State<HomeShell> createState() => _HomeShellState();
@@ -68,6 +74,8 @@ class _HomeShellState extends State<HomeShell> {
             fotoRepository: widget.fotoRepository,
             photoService: widget.photoService,
             captureService: widget.captureService,
+            orchestrator: widget.orchestrator,
+            settingsService: widget.settingsService,
           ),
           TrasferteListScreen(
             controller: _archivioController,
@@ -76,6 +84,8 @@ class _HomeShellState extends State<HomeShell> {
             fotoRepository: widget.fotoRepository,
             photoService: widget.photoService,
             captureService: widget.captureService,
+            orchestrator: widget.orchestrator,
+            settingsService: widget.settingsService,
           ),
           const _ImpostazioniPlaceholder(),
         ],

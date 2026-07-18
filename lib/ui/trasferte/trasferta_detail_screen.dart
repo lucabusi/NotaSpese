@@ -7,10 +7,20 @@ import '../../core/constants/categories.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/formatters.dart';
 import '../../data/models/spesa.dart';
+import '../../data/models/trasferta.dart';
+import '../../services/ocr/parsed_receipt.dart';
+import '../../services/ocr/recognition_orchestrator.dart';
 import '../../services/photo/receipt_capture_service.dart';
+import '../../services/settings/settings_service.dart';
+import '../spese/ocr_progress.dart';
 import '../spese/spesa_form_screen.dart';
 import 'trasferta_detail_controller.dart';
 import 'trasferta_form_screen.dart';
+
+extension _OcrEngineLabel on OcrEngine {
+  /// Sheet-row / picker label (spec: "ML Kit" / "Claude").
+  String get label => this == OcrEngine.claude ? 'Claude' : 'ML Kit';
+}
 
 enum DetailAction { modifica, archivia, ripristina, elimina }
 
@@ -18,11 +28,18 @@ enum DetailAction { modifica, archivia, ripristina, elimina }
 /// empty until fase 3), FAB placeholder. Pops `true` after archive/delete
 /// so the list screen reloads.
 class TrasfertaDetailScreen extends StatefulWidget {
-  const TrasfertaDetailScreen(
-      {super.key, required this.controller, required this.captureService});
+  const TrasfertaDetailScreen({
+    super.key,
+    required this.controller,
+    required this.captureService,
+    required this.orchestrator,
+    required this.settingsService,
+  });
 
   final TrasfertaDetailController controller;
   final ReceiptCaptureService captureService;
+  final RecognitionOrchestrator orchestrator;
+  final SettingsService settingsService;
 
   @override
   State<TrasfertaDetailScreen> createState() => _TrasfertaDetailScreenState();
@@ -31,10 +48,26 @@ class TrasfertaDetailScreen extends StatefulWidget {
 class _TrasfertaDetailScreenState extends State<TrasfertaDetailScreen> {
   TrasfertaDetailController get controller => widget.controller;
 
+  // Cached (not re-fetched per build, gotcha: a fresh Future in build would
+  // rebuild forever) sheet defaults; loaded once, best-effort.
+  OcrEngine _engineDefault = OcrEngine.mlkit;
+  bool _claudeAvailable = false;
+
   @override
   void initState() {
     super.initState();
     controller.load();
+    _loadOcrSettings();
+  }
+
+  Future<void> _loadOcrSettings() async {
+    final engine = await widget.settingsService.ocrEngineDefault;
+    final claudeAvailable = await widget.orchestrator.claudeAvailable;
+    if (!mounted) return;
+    setState(() {
+      _engineDefault = engine;
+      _claudeAvailable = claudeAvailable;
+    });
   }
 
   @override
@@ -83,36 +116,82 @@ class _TrasfertaDetailScreenState extends State<TrasfertaDetailScreen> {
   }
 
   Future<void> _openAddSheet() async {
+    // Mutated by the "sheet-motore" row tap (StatefulBuilder below); read
+    // again once the sheet is popped with 'scatta'.
+    var selectedEngine = _engineDefault;
     final scelta = await showModalBottomSheet<String>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                key: const Key('sheet-scatta'),
+                leading: const Icon(Symbols.photo_camera),
+                title: const Text('Scatta scontrino'),
+                subtitle: const Text('Scanner con ritaglio automatico'),
+                onTap: () => Navigator.of(context).pop('scatta'),
+              ),
+              ListTile(
+                key: const Key('sheet-motore'),
+                leading: const Icon(Symbols.tune),
+                title: Text('Motore: ${selectedEngine.label} ▾'),
+                onTap: () async {
+                  final picked = await _pickEngine(selectedEngine);
+                  if (picked != null) {
+                    setSheetState(() => selectedEngine = picked);
+                  }
+                },
+              ),
+              ListTile(
+                key: const Key('sheet-manuale'),
+                leading: const Icon(Symbols.edit),
+                title: const Text('Inserimento manuale'),
+                onTap: () => Navigator.of(context).pop('manuale'),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (scelta == 'manuale') await _openSpesaForm();
+    if (scelta == 'scatta') await _scattaEOcr(selectedEngine);
+  }
+
+  /// Per-shot engine choice (ML Kit / Claude); Claude disabled without a
+  /// configured API key.
+  Future<OcrEngine?> _pickEngine(OcrEngine current) {
+    return showModalBottomSheet<OcrEngine>(
       context: context,
       builder: (context) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              key: const Key('sheet-scatta'),
-              leading: const Icon(Symbols.photo_camera),
-              title: const Text('Scatta scontrino'),
-              subtitle: const Text('Scanner con ritaglio automatico'),
-              onTap: () => Navigator.of(context).pop('scatta'),
+              key: const Key('motore-mlkit'),
+              title: const Text('ML Kit'),
+              trailing: current == OcrEngine.mlkit
+                  ? const Icon(Symbols.check)
+                  : null,
+              onTap: () => Navigator.of(context).pop(OcrEngine.mlkit),
             ),
             ListTile(
-              key: const Key('sheet-manuale'),
-              leading: const Icon(Symbols.edit),
-              title: const Text('Inserimento manuale'),
-              onTap: () => Navigator.of(context).pop('manuale'),
+              key: const Key('motore-claude'),
+              enabled: _claudeAvailable,
+              title: const Text('Claude'),
+              trailing: current == OcrEngine.claude
+                  ? const Icon(Symbols.check)
+                  : null,
+              onTap: () => Navigator.of(context).pop(OcrEngine.claude),
             ),
             const SizedBox(height: 8),
           ],
         ),
       ),
     );
-    if (!mounted) return;
-    if (scelta == 'manuale') await _openSpesaForm();
-    if (scelta == 'scatta') {
-      final path = await _captureScatta();
-      if (path != null && mounted) await _openSpesaForm(pendingFoto: path);
-    }
   }
 
   /// Main path: ML Kit Document Scanner; picker camera as riserva
@@ -123,6 +202,61 @@ class _TrasfertaDetailScreenState extends State<TrasfertaDetailScreen> {
     } catch (_) {
       return widget.captureService.pickFromCamera();
     }
+  }
+
+  /// Scatta → progress fullscreen (annullabile) → form pre-compilato.
+  /// Annullo: la foto scattata viene scartata, si torna al dettaglio.
+  Future<void> _scattaEOcr(OcrEngine engine) async {
+    final path = await _captureScatta();
+    if (path == null || !mounted) return;
+    final t = controller.trasferta;
+    final result = await showOcrProgress(
+      context,
+      widget.orchestrator
+          .recognize(path, engine: engine, linguaHint: t?.linguaDefault),
+    );
+    if (result == null || !mounted) return;
+    _showFallbackSnackbarIfNeeded(result);
+    _showCyrillicSnackbarIfNeeded(result, t);
+    await _openSpesaForm(
+      pendingFoto: path,
+      parsed: result.receipt,
+      onRetryOtherEngine: _makeRetryCallback(path, result.receipt.engine, t),
+    );
+  }
+
+  /// "Riprova con altro motore" (banner OCR nel form): alterna l'ultimo
+  /// motore usato per questa foto e ri-esegue il riconoscimento.
+  Future<ParsedReceipt?> Function() _makeRetryCallback(
+      String path, OcrEngine lastEngine, Trasferta? t) {
+    var engine = lastEngine;
+    return () async {
+      engine = engine == OcrEngine.mlkit ? OcrEngine.claude : OcrEngine.mlkit;
+      final result = await widget.orchestrator
+          .recognize(path, engine: engine, linguaHint: t?.linguaDefault);
+      if (!mounted) return null;
+      _showFallbackSnackbarIfNeeded(result);
+      _showCyrillicSnackbarIfNeeded(result, t);
+      return result.receipt;
+    };
+  }
+
+  void _showFallbackSnackbarIfNeeded(RecognitionResult result) {
+    if (!result.claudeFallbackToMlkit) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Claude non raggiungibile, usato ML Kit')));
+  }
+
+  /// Gap noto ML Kit sul cirillico (spec): scontrino serbo non riconosciuto
+  /// → suggerisce Claude se disponibile, altrimenti chiede la API key.
+  void _showCyrillicSnackbarIfNeeded(RecognitionResult result, Trasferta? t) {
+    if (!result.receipt.isEmpty || t?.linguaDefault != 'sr') return;
+    final message = _claudeAvailable
+        ? 'Testo in cirillico non riconosciuto — prova con il motore Claude'
+        : 'Testo in cirillico non riconosciuto — configura una API key '
+            'Claude nelle impostazioni per riconoscerlo';
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   /// "Aggiungi foto" from inside the form: choose the capture path.
@@ -168,7 +302,12 @@ class _TrasfertaDetailScreenState extends State<TrasfertaDetailScreen> {
     }
   }
 
-  Future<void> _openSpesaForm({Spesa? spesa, String? pendingFoto}) async {
+  Future<void> _openSpesaForm({
+    Spesa? spesa,
+    String? pendingFoto,
+    ParsedReceipt? parsed,
+    Future<ParsedReceipt?> Function()? onRetryOtherEngine,
+  }) async {
     final t = controller.trasferta;
     if (t == null) return;
     await Navigator.of(context).push(MaterialPageRoute<void>(
@@ -180,6 +319,8 @@ class _TrasfertaDetailScreenState extends State<TrasfertaDetailScreen> {
         pendingFotoSourcePath: pendingFoto,
         onPickFoto: _pickFotoSource,
         photoPathResolver: controller.absolutePhotoPath,
+        parsed: parsed,
+        onRetryOtherEngine: onRetryOtherEngine,
         onSave: spesa == null
             ? (s, {nuovaFoto, rimuoviFoto = false}) =>
                 controller.createSpesa(s, fotoSourcePath: nuovaFoto)

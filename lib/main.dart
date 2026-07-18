@@ -7,8 +7,13 @@ import 'data/db/db_helper.dart';
 import 'data/repositories/foto_repository.dart';
 import 'data/repositories/spesa_repository.dart';
 import 'data/repositories/trasferta_repository.dart';
+import 'services/ocr/claude_ocr_service.dart';
+import 'services/ocr/mlkit_ocr_service.dart';
+import 'services/ocr/receipt_parser.dart';
+import 'services/ocr/recognition_orchestrator.dart';
 import 'services/photo/photo_service.dart';
 import 'services/photo/receipt_capture_service.dart';
+import 'services/settings/api_key_store.dart';
 import 'services/settings/settings_service.dart';
 
 void main() {
@@ -37,11 +42,21 @@ void main() {
       PhotoService(settingsService, basePathProvider: photoBasePath);
   final captureService = ReceiptCaptureService();
 
+  final apiKeyStore = ApiKeyStore();
+  final orchestrator = RecognitionOrchestrator(
+    mlkitOcr: MlkitOcrService(),
+    claudeOcr: ClaudeOcrService(apiKeyProvider: apiKeyStore.read),
+    parser: ReceiptParser(),
+    apiKeyProvider: apiKeyStore.read,
+  );
+
   runApp(NotaSpeseApp(
     trasfertaRepository: trasfertaRepository,
     spesaRepository: spesaRepository,
     fotoRepository: fotoRepository,
     photoService: photoService,
     captureService: captureService,
+    orchestrator: orchestrator,
+    settingsService: settingsService,
   ));
 }

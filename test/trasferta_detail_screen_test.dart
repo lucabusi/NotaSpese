@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -10,6 +11,11 @@ import 'package:nota_spese/data/models/trasferta.dart';
 import 'package:nota_spese/data/repositories/foto_repository.dart';
 import 'package:nota_spese/data/repositories/spesa_repository.dart';
 import 'package:nota_spese/data/repositories/trasferta_repository.dart';
+import 'package:nota_spese/services/ocr/claude_ocr_service.dart';
+import 'package:nota_spese/services/ocr/mlkit_ocr_service.dart';
+import 'package:nota_spese/services/ocr/parsed_receipt.dart';
+import 'package:nota_spese/services/ocr/receipt_parser.dart';
+import 'package:nota_spese/services/ocr/recognition_orchestrator.dart';
 import 'package:nota_spese/services/photo/photo_service.dart';
 import 'package:nota_spese/services/photo/receipt_capture_service.dart';
 import 'package:nota_spese/services/settings/settings_service.dart';
@@ -27,6 +33,46 @@ class _FakeCaptureService extends ReceiptCaptureService {
 
   @override
   Future<String?> scanWithDocumentScanner() async => path;
+}
+
+/// Fake orchestrator: default `recognize` resolves immediately with a
+/// pre-filled receipt (engine == the one requested); override
+/// [recognizeImpl] per test for fallback/empty/never-completing scenarios.
+class _FakeOrchestrator extends RecognitionOrchestrator {
+  _FakeOrchestrator({this.claudeAvailableValue = true})
+      : super(
+          mlkitOcr: MlkitOcrService(),
+          claudeOcr: ClaudeOcrService(apiKeyProvider: () async => null),
+          parser: ReceiptParser(),
+          apiKeyProvider: () async => null,
+        );
+
+  bool claudeAvailableValue;
+  Future<RecognitionResult> Function(String imagePath, OcrEngine engine)?
+      recognizeImpl;
+  final List<OcrEngine> calls = [];
+
+  @override
+  Future<bool> get claudeAvailable async => claudeAvailableValue;
+
+  @override
+  Future<RecognitionResult> recognize(
+    String imagePath, {
+    required OcrEngine engine,
+    String? linguaHint,
+  }) {
+    calls.add(engine);
+    return recognizeImpl?.call(imagePath, engine) ??
+        Future.value(RecognitionResult(
+          receipt: ParsedReceipt(
+            importo: 12.5,
+            fornitore: 'Bar Roma',
+            data: DateTime(2026, 7, 10),
+            engine: engine,
+          ),
+          claudeFallbackToMlkit: false,
+        ));
+  }
 }
 
 void main() {
@@ -77,12 +123,15 @@ void main() {
     }
   });
 
-  Future<void> pump(WidgetTester tester) async {
+  Future<void> pump(WidgetTester tester,
+      {_FakeOrchestrator? orchestrator, int? id}) async {
     await tester.pumpWidget(MaterialApp(
       home: TrasfertaDetailScreen(
         controller: TrasfertaDetailController(
-            trasfertaId, trasfertaRepo, spesaRepo, fotoRepo, photoService),
+            id ?? trasfertaId, trasfertaRepo, spesaRepo, fotoRepo, photoService),
         captureService: _FakeCaptureService(sourceJpg),
+        orchestrator: orchestrator ?? _FakeOrchestrator(),
+        settingsService: SettingsService(),
       ),
     ));
     await tester.pumpAndSettle();
@@ -265,5 +314,127 @@ void main() {
     await tester.tap(find.text('Annulla'));
     await tester.pumpAndSettle();
     expect(await trasfertaRepo.getById(trasfertaId), isNotNull);
+  });
+
+  testWidgets('FAB sheet shows the engine selector row (default ML Kit)',
+      (tester) async {
+    await pump(tester);
+
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('sheet-motore')), findsOneWidget);
+    expect(find.text('Motore: ML Kit ▾'), findsOneWidget);
+  });
+
+  testWidgets(
+      'scatta: fake capture → progress fullscreen → form opens with '
+      'OCR banner and pre-filled fields', (tester) async {
+    final orchestrator = _FakeOrchestrator();
+    await pump(tester, orchestrator: orchestrator);
+
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('sheet-scatta')));
+    await tester.pump();
+    expect(find.text('Riconoscimento in corso…'), findsOneWidget);
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Nuova spesa'), findsOneWidget);
+    expect(find.byKey(const Key('ocr-banner')), findsOneWidget);
+    // campo-fornitore is scrolled past the viewport+cache extent (gotcha:
+    // plain ListView still needs an explicit scroll for finders further down).
+    await scrollTo(tester, find.byKey(const Key('campo-fornitore')));
+    expect(find.text('Bar Roma'), findsOneWidget);
+    expect(orchestrator.calls, [OcrEngine.mlkit]);
+  });
+
+  testWidgets('annulla during progress: no form opens, back on detail',
+      (tester) async {
+    final orchestrator = _FakeOrchestrator()
+      ..recognizeImpl =
+          (path, engine) => Completer<RecognitionResult>().future;
+    await pump(tester, orchestrator: orchestrator);
+
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('sheet-scatta')));
+    await tester.pump();
+    expect(find.text('Riconoscimento in corso…'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('ocr-annulla')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Nuova spesa'), findsNothing);
+    expect(find.text('Tokyo'), findsOneWidget);
+  });
+
+  testWidgets('Claude fallback to ML Kit shows the SnackBar',
+      (tester) async {
+    final orchestrator = _FakeOrchestrator()
+      ..recognizeImpl = (path, engine) async => RecognitionResult(
+            receipt: const ParsedReceipt(engine: OcrEngine.mlkit),
+            claudeFallbackToMlkit: true,
+          );
+    await pump(tester, orchestrator: orchestrator);
+
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('sheet-scatta')));
+    await tester.pumpAndSettle();
+
+    expect(
+        find.text('Claude non raggiungibile, usato ML Kit'), findsOneWidget);
+  });
+
+  testWidgets(
+      'cyrillic gap: empty parsed + lingua sr suggests Claude when available',
+      (tester) async {
+    final srId = await trasfertaRepo.insert(Trasferta(
+      nome: 'Beograd',
+      dataInizio: DateTime(2026, 7, 10),
+      linguaDefault: 'sr',
+      createdAt: DateTime(2026, 7, 9),
+    ));
+    final orchestrator = _FakeOrchestrator()
+      ..recognizeImpl = (path, engine) async => RecognitionResult(
+            receipt: const ParsedReceipt(engine: OcrEngine.mlkit),
+            claudeFallbackToMlkit: false,
+          );
+    await pump(tester, orchestrator: orchestrator, id: srId);
+
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('sheet-scatta')));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('cirillico'), findsOneWidget);
+    expect(find.textContaining('Claude'), findsOneWidget);
+  });
+
+  testWidgets(
+      'cyrillic gap without a configured API key asks to set it up',
+      (tester) async {
+    final srId = await trasfertaRepo.insert(Trasferta(
+      nome: 'Beograd',
+      dataInizio: DateTime(2026, 7, 10),
+      linguaDefault: 'sr',
+      createdAt: DateTime(2026, 7, 9),
+    ));
+    final orchestrator = _FakeOrchestrator(claudeAvailableValue: false)
+      ..recognizeImpl = (path, engine) async => RecognitionResult(
+            receipt: const ParsedReceipt(engine: OcrEngine.mlkit),
+            claudeFallbackToMlkit: false,
+          );
+    await pump(tester, orchestrator: orchestrator, id: srId);
+
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('sheet-scatta')));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('cirillico'), findsOneWidget);
+    expect(find.textContaining('API key'), findsOneWidget);
   });
 }
