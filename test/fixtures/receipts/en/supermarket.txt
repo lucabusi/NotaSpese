@@ -1,0 +1,10 @@
+Green Valley Market
+221 Baker Street
+06/20/2026
+
+Bread                 2.20
+Milk                  1.50
+Eggs                  3.00
+Subtotal              6.70
+Sales Tax             0.54
+Total                 7.24

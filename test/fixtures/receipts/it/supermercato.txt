@@ -1,0 +1,13 @@
+Supermercato Conad
+Via Garibaldi 12
+Data: 12/06/2026
+
+Pane                 2,50
+Latte                1,20
+Pasta                0,89
+Detersivo            5,00
+Frutta               3,88
+Subtotale           13,47
+Totale              13,47
+Contante            20,00
+Resto                6,53

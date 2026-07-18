@@ -1,0 +1,4 @@
+Corner Newsstand
+Magazine               4.00
+Gum                    1.40
+Total                  5.40

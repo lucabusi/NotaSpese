@@ -1,0 +1,7 @@
+Taxi Roma Capitale
+Licenza 1234
+Data: 20/06/2026
+
+Corsa urbana
+Supplemento notturno     3,00
+Totale                  18,00

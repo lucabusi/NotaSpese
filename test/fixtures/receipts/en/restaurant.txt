@@ -1,0 +1,9 @@
+The Old Oak Tavern
+14 High Street
+07/15/2026
+
+Starter                5.00
+Main Course           18.50
+Dessert                6.00
+Service Charge         2.95
+Total                 32.45

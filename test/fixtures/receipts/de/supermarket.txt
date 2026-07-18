@@ -1,0 +1,10 @@
+Rewe Markt
+18.06.2026
+
+Brot                  2,10
+Milch                 1,30
+Butter                2,50
+Zwischensumme         5,90
+Gesamtbetrag          5,90
+Bar                  10,00
+Rueckgeld             4,10

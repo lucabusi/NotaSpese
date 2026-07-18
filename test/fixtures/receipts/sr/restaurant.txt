@@ -1,0 +1,7 @@
+Restoran Kod Micka
+15/05/2026
+
+Cevapi                350,00
+Pljeskavica           300,00
+Salata                100,00
+Ukupno                750,00

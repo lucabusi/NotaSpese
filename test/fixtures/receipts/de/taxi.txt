@@ -1,0 +1,6 @@
+Taxi Mueller
+25.05.2026
+
+Grundgebuehr            3,50
+Strecke                15,80
+Gesamtbetrag           19,30

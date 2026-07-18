@@ -1,0 +1,10 @@
+Trattoria da Mario
+Via Roma 5
+Tel. 02 1234567
+Data: 05/07/2026
+
+Coperto x2              4,00
+Antipasto misto        12,00
+Pasta al pomodoro      10,50
+Acqua                   2,00
+Totale                 28,50

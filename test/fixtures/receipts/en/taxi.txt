@@ -1,0 +1,8 @@
+City Cab Co
+Vehicle 42
+05/28/2026
+
+Base fare              4.50
+Distance              12.30
+Airport surcharge      5.00
+Total                 21.80
