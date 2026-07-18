@@ -97,27 +97,28 @@
 - [ ] Su dispositivo/emulatore con camera: scatto → crop → salva → thumbnail in lista → viewer → elimina spesa → file spariti dal filesystem — **SKIP esplicito** (ambiente Android incompleto, vedi gotcha in `CLAUDE.md`); compensato da widget test e2e con capture fake (scatta→preview→salva→thumb in lista→elimina→file rimossi, 2026-07-17); API Document Scanner (beta) da verificare al primo build su device
 - [x] `flutter analyze` + test verdi (102 test, 2026-07-17)
 
-## Fase 5 — OCR + parser multilingua ▢
-- [ ] Interfaccia `OcrService` unica (input immagine → testo grezzo); i chiamanti non conoscono il motore
-- [ ] `MlkitOcrService` (default, offline) — richiede `compileSdk 35` (già in fase 0)
-- [ ] `receipt_parser.dart`: estrazione **importo** (valore maggiore + keyword totale/total/合計/итого/gesamt), **fornitore**, **data** (regex per-lingua, fallback data odierna — mai bloccare il flusso)
-- [ ] Lingue parser: IT · EN · JA · SR · DE (+ pattern comuni); hint da `lingua_default` trasferta
-- [ ] Gap cirillico ML Kit (SR): instradare scontrini in cirillico verso il motore Claude quando disponibile; messaggio chiaro se offline senza Claude (vedi `docs/catena-detection-ocr.md`)
-- [ ] Inferenza valuta dalla lingua/paese (JA→JPY, SR→RSD, EN-UK→GBP, CH→CHF, US→USD, area euro→EUR), override da impostazioni trasferta, correzione utente nel form
-- [ ] Form di conferma pre-compilato con banner "Compilato dallo scontrino · verifica i dati" + indicazione motore usato (`ocr_engine` salvato)
-- [ ] `ClaudeOcrService` (opzionale): Vision API con modello **`claude-haiku-4-5`** (~$0,2-0,35/mese a 90 scontrini) + **structured outputs** (`output_config.format` con `json_schema` dei campi → JSON garantito valido, salta il parser); stesso prompt/schema del motore locale per confronto; disabilitato se API key assente; se offline → fallback automatico a ML Kit. Per poterlo testare in questa fase: campo API key **minimale** in Impostazioni via `flutter_secure_storage` (anticipo — la schermata completa è in fase 8)
-- [ ] **Gate benchmark IA locale comparativo** (primo task del blocco, da studio 0a v2): su dispositivo reale con 3-5 scontrini veri — **Gemma 3 1B int4** (primario) e **Qwen2.5 1.5B** sulle fixture JA/SR (stesso runtime `.task`, provarli entrambi costa ~zero); riferimento qualità: stesso set su Claude Haiku 4.5. Criteri: latenza mediana ≤10 s, no OOM, importo+data corretti ≥80% su IT/EN. Falliti tutti → motore nascosto, fine-tune 270M in valutazione v1.1
-- [ ] `LocalAiOcrService` (se gate superato): OCR ML Kit → Gemma 3 1B via `flutter_gemma` → JSON campi; output non valido → fallback parser regex, mai bloccare
-- [ ] Prompt few-shot versionato (`local_ai_prompt.dart`) con esempi per lingua, validato dalle stesse fixture del parser
-- [ ] (Opzionale) Gemini Nano via ML Kit Prompt API: se `checkFeatureStatus()` disponibile sul device → usarlo senza storage aggiuntivo (bonus, non requisito)
-- [ ] Selettore motore: impostazione globale (default ML Kit) + override per singolo scatto PRIMA dello scatto (bottom sheet) o nel form di conferma ("riprova con altro motore") — la UI del Document Scanner è di Play Services, non personalizzabile; opzione IA locale visibile solo se implementata (`ocr_engine` = 'local_ai')
-- [ ] Progress OCR fullscreen durante il riconoscimento
-- [ ] **Suite fixture**: scontrini campione `.txt` per lingua in `test/fixtures/receipts/` + unit test importo/fornitore/data (l'utente fornisce directory immagini campione per test manuali)
+## Fase 5 — OCR + parser multilingua ✅ 2026-07-18
+- [x] Interfaccia `OcrService` unica (input immagine → testo grezzo); i chiamanti non conoscono il motore
+- [x] `MlkitOcrService` (default, offline) — implementato su `compileSdk 35`+; script latino verificato via unit/widget test — **SKIP esplicito** verifica reale su device (ambiente Android incompleto, vedi gotcha in `CLAUDE.md`); limitazione script latino ML Kit da confermare al primo build su dispositivo
+- [x] `receipt_parser.dart`: estrazione **importo** (valore maggiore + keyword totale/total/合計/итого/gesamt), **fornitore**, **data** (regex per-lingua, fallback data odierna — mai bloccare il flusso)
+- [x] Lingue parser: IT · EN · JA · SR · DE (+ pattern comuni); hint da `lingua_default` trasferta
+- [x] Gap cirillico ML Kit (SR): instradamento verso Claude implementato (banner + suggerimento se API key assente)
+- [x] Inferenza valuta dalla lingua/paese (JA→JPY, SR→RSD, EN-UK→GBP, CH→CHF, US→USD, area euro→EUR), override da impostazioni trasferta, correzione utente nel form
+- [x] Form di conferma pre-compilato con banner "Compilato dallo scontrino · verifica i dati" + indicazione motore usato (`ocr_engine` salvato)
+- [x] `ClaudeOcrService` (opzionale): Vision API con modello **`claude-haiku-4-5`** + **structured outputs** (`output_config.format`/`json_schema`), raw HTTP, testato con `MockClient`; disabilitato se API key assente; offline → fallback automatico a ML Kit (`RecognitionOrchestrator`). Campo API key **minimale** in Impostazioni via `flutter_secure_storage` (anticipo — schermata completa in fase 8)
+- [ ] **Gate benchmark IA locale comparativo** — **SKIP esplicito, rimandato** (decisione 2026-07-18, vedi `Specifiche.md` §OCR): richiede dispositivo reale non disponibile in questo ambiente; nessuna regressione, motore IA locale resta nascosto finché il gate non è superato
+- [ ] `LocalAiOcrService` — **SKIP esplicito, rimandato** (decisione 2026-07-18): subordinato al gate benchmark sopra, non implementato in questa fase
+- [ ] Prompt few-shot versionato (`local_ai_prompt.dart`) — **SKIP esplicito, rimandato** (decisione 2026-07-18): subordinato a `LocalAiOcrService`
+- [ ] (Opzionale) Gemini Nano via ML Kit Prompt API — **SKIP esplicito, rimandato** (decisione 2026-07-18): bonus non requisito, richiede device per `checkFeatureStatus()`
+- [x] Selettore motore: impostazione globale (default ML Kit) in `ImpostazioniMinimal` (`SegmentedButton`) + override per singolo scatto nel bottom sheet FAB e nel form di conferma ("riprova con altro motore"); opzione IA locale non esposta (non implementata)
+- [x] Progress OCR fullscreen durante il riconoscimento
+- [x] **Suite fixture**: 18 scontrini campione `.txt` per lingua in `test/fixtures/receipts/` + unit test importo/fornitore/data
 
 **Verifica fase 5**
-- [ ] `flutter test` parser verde su tutte le lingue fixture
-- [ ] Su dispositivo: scatto scontrino reale → form pre-compilato corretto (almeno IT)
-- [ ] Con API key assente: Claude Vision non selezionabile; offline: fallback a ML Kit
+- [x] `flutter test` parser verde su tutte le lingue fixture (227/227 test totali, 2026-07-18)
+- [ ] Su dispositivo: scatto scontrino reale → form pre-compilato corretto (almeno IT) — **SKIP esplicito** (ambiente Android incompleto, vedi gotcha in `CLAUDE.md`); compensato da widget test e2e del flusso capture→progress→form con OCR banner
+- [x] Con API key assente: Claude Vision non selezionabile/segnala setup; offline: fallback a ML Kit — verificato con widget test (mock `MockClient`, nessun device richiesto)
+- [x] `flutter analyze` → zero issue (2026-07-18)
 
 ## Fase 6 — Multi-valuta / conversione EUR ▢
 - [ ] `exchange_service.dart`: conversione via `frankfurter.app` (no key), timeout breve, mai bloccante

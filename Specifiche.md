@@ -27,10 +27,10 @@
 | `share_plus` | share sheet (viewer foto, export) — anticipato dalla fase 7 | 4 |
 | `permission_handler` | **non usato in v1.0**: scanner = UI Play Services (no permessi in-app), `image_picker` gestisce CAMERA da se; permessi dichiarati nel manifest | 4 |
 | `file_picker` | selezione zip per restore + destinazione backup (SAF) | 8 |
-| `google_mlkit_text_recognition` | OCR offline (default) | 5 |
-| `flutter_gemma` | IA locale: Gemma 3 1B on-device (vedi studio fattibilità) | 5 |
-| `http` | Claude Vision API + frankfurter.app | 5/6 |
-| `flutter_secure_storage` | API key in Android Keystore | 5 |
+| `google_mlkit_text_recognition` | OCR offline (default), script latino — implementato fase 5, `MlkitOcrService` | 5 |
+| `flutter_gemma` | IA locale: Gemma 3 1B on-device — **non aggiunto**, rimandato al gate benchmark su device (decisione 2026-07-18) | 5 (rimandato) |
+| `http` | Claude Vision API (raw HTTP, `ClaudeOcrService`) + frankfurter.app — implementato fase 5 | 5/6 |
+| `flutter_secure_storage` | API key Claude Vision in Android Keystore — implementato fase 5 (campo minimale in `ImpostazioniMinimal`) | 5 |
 | `shared_preferences` | settings non sensibili | 4 |
 | `csv` | export CSV | 7 |
 | `pdf` + `printing` | export PDF | 7 |
@@ -192,10 +192,10 @@ FAB "+" nel dettaglio trasferta → pulsante "✏ Inserimento manuale"
 3. L'utente può sempre sovrascrivere nel form di conferma
 
 ### OCR — selezione motore
-- Impostazione globale in **Settings** (`ML Kit` di default); selettore a 3 opzioni: ML Kit / IA locale / Claude Vision (IA locale visibile solo se lo studio di fattibilità dà esito positivo)
-- Override per singolo scatto: la UI del Document Scanner è di Play Services e non è personalizzabile → l'override si sceglie PRIMA dello scatto (nel bottom sheet "Aggiungi spesa") oppure DOPO, nel form di conferma ("riprova con altro motore")
+- Impostazione globale in **Settings** (`ML Kit` di default); selettore a 2 opzioni implementato in fase 5 (`ImpostazioniMinimal`, `SegmentedButton`): ML Kit / Claude Vision — opzione IA locale non esposta finché non implementata (vedi nota rimando sotto)
+- Override per singolo scatto: la UI del Document Scanner è di Play Services e non è personalizzabile → l'override si sceglie PRIMA dello scatto (nel bottom sheet "Aggiungi spesa") oppure DOPO, nel form di conferma ("riprova con altro motore") — implementato in `RecognitionOrchestrator`
 - Se selezionata l'API ma il dispositivo è offline → fallback automatico a ML Kit
-- **IA locale sul dispositivo:** studio di fattibilità completato, **v2** (2026-07-15) → **`docs/fattibilita-ia-locale.md`**. Verdetto: **GO confermato** per l'architettura ibrida — OCR ML Kit (testo) → LLM locale via `flutter_gemma`/MediaPipe → JSON campi. **Shortlist modelli intercambiabili** (stesso runtime `.task`): **Gemma 3 1B int4** primario (~529 MB), **Qwen2.5 1.5B** riserva per JA/SR (~1-1,6 GB). Modello scaricato on-demand dalle Impostazioni, mai bundlato nell'APK; parser regex sempre come fallback. Gate vincolante in fase 5: benchmark comparativo su dispositivo reale (latenza ≤10 s, no OOM, importo+data ≥80% su IT/EN; riferimento qualità: Claude Haiku 4.5). NO-GO: VLM end-to-end Gemma 3n (~3 GB), SmolVLM 256/500M (qualità OCR e toolchain Flutter insufficienti); fine-tune Gemma 3 270M → backlog v1.1.
+- **IA locale sul dispositivo — RIMANDATA (decisione 2026-07-18):** studio di fattibilità completato, **v2** (2026-07-15) → **`docs/fattibilita-ia-locale.md`**. Verdetto: **GO confermato** per l'architettura ibrida — OCR ML Kit (testo) → LLM locale via `flutter_gemma`/MediaPipe → JSON campi. **Shortlist modelli intercambiabili** (stesso runtime `.task`): **Gemma 3 1B int4** primario (~529 MB), **Qwen2.5 1.5B** riserva per JA/SR (~1-1,6 GB). Modello scaricato on-demand dalle Impostazioni, mai bundlato nell'APK; parser regex sempre come fallback. Gate vincolante (benchmark comparativo su dispositivo reale: latenza ≤10 s, no OOM, importo+data ≥80% su IT/EN; riferimento qualità: Claude Haiku 4.5) **non eseguibile in questo ambiente** (nessun device disponibile, vedi gotcha in `CLAUDE.md`) → **IA locale rimandata a gate benchmark su device (decisione 2026-07-18)**: `LocalAiOcrService`, prompt few-shot e Gemini Nano non implementati in fase 5, motore nascosto nel selettore. NO-GO confermati: VLM end-to-end Gemma 3n (~3 GB), SmolVLM 256/500M (qualità OCR e toolchain Flutter insufficienti); fine-tune Gemma 3 270M → backlog v1.1.
 - **Motore Claude Vision API:** modello di default **`claude-haiku-4-5`** ($1/$5 per MTok → ~$0,2-0,35/mese a 90 scontrini) con **structured outputs** (`output_config.format`, `json_schema` dei campi) → JSON garantito valido, nessun parsing fragile. Upgrade opzionale a `claude-opus-4-8` per scontrini difficili.
 - **API key Claude Vision** — inserita dall'utente nella schermata Impostazioni; salvata con `flutter_secure_storage` (Android Keystore, non SharedPreferences in chiaro)
 
@@ -212,6 +212,7 @@ Riferimento di design: `Trasferte.dc.html` (importabile via claude_design MCP �
 - Form inserimento/modifica spesa: importo originale + `currency_picker.dart` (searchable, pre-compilato da OCR); campo EUR opzionale (auto via `frankfurter.app` se online, altrimenti editabile o vuoto); tastiera numerica, categoria chip-select, data auto oggi; thumbnail foto se presente / pulsante "Aggiungi foto" se assente
 - Visualizzatore foto scontrino (full screen)
 - Schermata Impostazioni: motore OCR default (ML Kit / IA locale / Claude Vision API — IA locale se fattibile); API key Claude Vision (via `flutter_secure_storage`); directory foto (default storage interno app); qualità JPG (default 70%, solo nuove foto); indicatore spazio usato dalla cartella foto; trigger backup manuale (zip DB + foto)
+  - **Stato fase 5 — `ImpostazioniMinimal` (anticipo, schermata completa in fase 8):** selettore motore OCR default a 2 opzioni (`SegmentedButton` ML Kit/Claude Vision) + campo API key Claude Vision minimale, mascherato, salvato/letto via `flutter_secure_storage`; il resto (directory foto, qualità JPG, spazio usato, backup) resta rimandato alla schermata completa di fase 8
 - Gestione permessi Android API 33+ (`CAMERA`, `READ_MEDIA_IMAGES`) a runtime
 
 
