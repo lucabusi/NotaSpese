@@ -25,6 +25,8 @@ import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import 'fakes/fake_exchange_service.dart';
+
 /// Fake capture: the scanner "returns" a prepared local jpg.
 class _FakeCaptureService extends ReceiptCaptureService {
   _FakeCaptureService(this.path);
@@ -134,6 +136,7 @@ void main() {
         captureService: _FakeCaptureService(sourceJpg),
         orchestrator: orchestrator ?? _FakeOrchestrator(),
         settingsService: SettingsService(),
+        exchangeService: FakeExchangeService(),
       ),
     ));
     await tester.pumpAndSettle();

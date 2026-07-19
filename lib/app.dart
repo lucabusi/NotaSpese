@@ -4,6 +4,7 @@ import 'core/theme/app_theme.dart';
 import 'data/repositories/foto_repository.dart';
 import 'data/repositories/spesa_repository.dart';
 import 'data/repositories/trasferta_repository.dart';
+import 'services/currency/exchange_service.dart';
 import 'services/ocr/recognition_orchestrator.dart';
 import 'services/photo/photo_service.dart';
 import 'services/photo/receipt_capture_service.dart';
@@ -22,6 +23,7 @@ class NotaSpeseApp extends StatelessWidget {
     required this.orchestrator,
     required this.settingsService,
     required this.apiKeyStore,
+    required this.exchangeService,
   });
 
   final TrasfertaRepository trasfertaRepository;
@@ -32,6 +34,7 @@ class NotaSpeseApp extends StatelessWidget {
   final RecognitionOrchestrator orchestrator;
   final SettingsService settingsService;
   final ApiKeyStore apiKeyStore;
+  final ExchangeService exchangeService;
 
   @override
   Widget build(BuildContext context) {
@@ -47,6 +50,7 @@ class NotaSpeseApp extends StatelessWidget {
         orchestrator: orchestrator,
         settingsService: settingsService,
         apiKeyStore: apiKeyStore,
+        exchangeService: exchangeService,
       ),
     );
   }

@@ -353,8 +353,11 @@ CREATE TABLE foto (
 - Importo salvato sempre nella **valuta originale** (`importo` + `valuta` ISO 4217).
 - **Riconoscimento valuta dallo scontrino:** inferisce la valuta dalla lingua riconosciuta (se non specificata nelle impostazioni della trasferta) (es. JA → JPY, SR → RSD, GB/EN-UK → GBP, CH → CHF, US/EN-US → USD, area euro → EUR). L'utente può correggere nel form di conferma.
 - **Conversione EUR — non obbligatoria:**
-  - Se **online**: conversione automatica al salvataggio via `frankfurter.app` (API pubblica gratuita, no key). Il campo `importo_eur` viene valorizzato silenziosamente.
-  - Se **offline** o se l'utente preferisce: campo `importo_eur` editabile manualmente nel form, lasciabile vuoto.
+  - Se **online**: conversione **live nel form** (con debounce) via `frankfurter.app` (API pubblica gratuita, no key), al **tasso storico alla data della spesa**. Il campo `importo_eur` viene valorizzato con badge **AUTO**.
+  - Se **offline** o se l'utente preferisce: campo `importo_eur` editabile manualmente nel form, lasciabile vuoto; l'edit manuale disattiva l'AUTO.
+  - Su una spesa già salvata non c'è mai ricalcolo automatico: solo il pulsante di ricalcolo esplicito lo aggiorna.
+  - Toggle "Tassi di cambio online" in Impostazioni per disattivare del tutto le chiamate online.
+  - ⚠️ Limite valute: `frankfurter.app` copre solo le ~30 valute ECB — **RSD e AED non hanno conversione automatica** (campo EUR resta manuale, nessun errore); eventuale API alternativa da valutare in v1.1.
 - I totali della trasferta mostrano la somma nella valuta originale, più eventuale conversione in EUR se disponibile.
 - Valute supportate: lista enum nel codice (EUR, JPY, USD, GBP, CHF, RSD, AED, SGD, ecc.) — nessuna API esterna per la lista valute. ⚠️ Non includere HRK: la kuna croata è stata sostituita dall'EUR nel 2023.
 

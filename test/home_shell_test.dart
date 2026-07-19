@@ -21,6 +21,8 @@ import 'package:nota_spese/version.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import 'fakes/fake_exchange_service.dart';
+
 /// In-memory fake: [ApiKeyStore] wraps FlutterSecureStorage, not
 /// host-testable (see class doc), so tests extend it and override the
 /// three methods instead of touching the platform channel.
@@ -89,6 +91,7 @@ void main() {
         ),
         settingsService: settingsService ?? SettingsService(),
         apiKeyStore: apiKeyStore ?? _FakeApiKeyStore(),
+        exchangeService: FakeExchangeService(),
       ),
     ));
     await tester.pumpAndSettle();
@@ -128,6 +131,12 @@ void main() {
     await tester.tap(find.text('Impostazioni'));
     await tester.pumpAndSettle();
 
+    // Scroll settings ListView to render version footer (pushed down by rates toggle card).
+    await tester.dragUntilVisible(
+      find.textContaining(appVersion),
+      find.byType(Scrollable).last,
+      const Offset(0, -100),
+    );
     expect(find.textContaining(appVersion), findsOneWidget);
   });
 
@@ -247,5 +256,20 @@ void main() {
           find.byKey(const Key('motore-default')));
       expect(after.selected, {OcrEngine.mlkit});
     });
+  });
+
+  testWidgets('toggle tassi online: default ON, tap persiste OFF',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    await pump(tester);
+    await tester.tap(find.text('Impostazioni'));
+    await tester.pumpAndSettle();
+    final toggle = find.byKey(const Key('toggle-tassi-online'));
+    await tester.ensureVisible(toggle);
+    expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+    expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+    expect(await SettingsService().tassiOnline, isFalse);
   });
 }

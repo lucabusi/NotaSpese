@@ -6,6 +6,7 @@ import '../../core/utils/formatters.dart';
 import '../../data/repositories/foto_repository.dart';
 import '../../data/repositories/spesa_repository.dart';
 import '../../data/repositories/trasferta_repository.dart';
+import '../../services/currency/exchange_service.dart';
 import '../../services/ocr/recognition_orchestrator.dart';
 import '../../services/photo/photo_service.dart';
 import '../../services/photo/receipt_capture_service.dart';
@@ -29,6 +30,7 @@ class TrasferteListScreen extends StatefulWidget {
     required this.captureService,
     required this.orchestrator,
     required this.settingsService,
+    required this.exchangeService,
   });
 
   final TrasferteListController controller;
@@ -39,6 +41,7 @@ class TrasferteListScreen extends StatefulWidget {
   final ReceiptCaptureService captureService;
   final RecognitionOrchestrator orchestrator;
   final SettingsService settingsService;
+  final ExchangeService exchangeService;
 
   @override
   State<TrasferteListScreen> createState() => _TrasferteListScreenState();
@@ -72,6 +75,7 @@ class _TrasferteListScreenState extends State<TrasferteListScreen> {
         captureService: widget.captureService,
         orchestrator: widget.orchestrator,
         settingsService: widget.settingsService,
+        exchangeService: widget.exchangeService,
       ),
     ));
     await controller.load();

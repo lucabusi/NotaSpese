@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -9,6 +10,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/utils/formatters.dart';
 import '../../data/models/foto.dart';
 import '../../data/models/spesa.dart';
+import '../../services/currency/exchange_service.dart';
 import '../../services/ocr/parsed_receipt.dart';
 import '../foto/photo_viewer_screen.dart';
 import '../shared/widgets/category_chips.dart';
@@ -44,6 +46,7 @@ class SpesaFormScreen extends StatefulWidget {
     this.onDelete,
     this.parsed,
     this.onRetryOtherEngine,
+    required this.exchange,
   });
 
   final int trasfertaId;
@@ -65,6 +68,9 @@ class SpesaFormScreen extends StatefulWidget {
 
   /// Re-runs recognition with the other engine (null → menu item hidden).
   final Future<ParsedReceipt?> Function()? onRetryOtherEngine;
+
+  /// Fase 6: live EUR conversion (creation only, see [_scheduleConvert]).
+  final ExchangeService exchange;
 
   @override
   State<SpesaFormScreen> createState() => _SpesaFormScreenState();
@@ -106,6 +112,14 @@ class _SpesaFormScreenState extends State<SpesaFormScreen> {
   late final Future<String>? _thumbAbsolute = widget.initialFoto == null
       ? null
       : widget.photoPathResolver?.call(widget.initialFoto!.thumbPath);
+
+  // Fase 6 live conversion state. AUTO = the EUR field holds a value computed
+  // from _eurRate; a manual user edit clears it permanently for this form
+  // (design decision: no silent recalculation, refresh button only).
+  Timer? _convertDebounce;
+  bool _eurManual = false;
+  late bool _eurAuto = widget.initial?.tassoCambio != null;
+  late double? _eurRate = widget.initial?.tassoCambio;
 
   static int _decimalDigits(String code) =>
       Currency.fromCode(code)?.decimalDigits ?? 2;
@@ -161,10 +175,64 @@ class _SpesaFormScreenState extends State<SpesaFormScreen> {
       }
       _currentParsed = result;
     });
+    _scheduleConvert();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _importo.addListener(_scheduleConvert);
+    _scheduleConvert(); // OCR pre-fill: convert what's already in the form
+  }
+
+  /// Creation only, until the user edits the EUR field by hand. Existing
+  /// expenses are never auto-recalculated (refresh button only).
+  void _scheduleConvert() {
+    if (widget.initial != null || _eurManual || _valuta == 'EUR') return;
+    _convertDebounce?.cancel();
+    _convertDebounce =
+        Timer(const Duration(milliseconds: 600), () => _convertNow());
+  }
+
+  Future<void> _convertNow({bool force = false}) async {
+    final importo = _importo.amount;
+    if (importo == null || importo <= 0 || _valuta == 'EUR') return;
+    final result = await widget.exchange
+        .convert(amount: importo, from: _valuta, date: _data);
+    // Discard stale results: amount changed while the fetch was in flight.
+    if (!mounted || _importo.amount != importo) return;
+    if (result == null) {
+      if (force) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Tasso non disponibile')));
+      }
+      return;
+    }
+    setState(() {
+      _importoEur.text =
+          result.amountEur.toStringAsFixed(2).replaceAll('.', ',');
+      _eurAuto = true;
+      _eurRate = result.rate;
+    });
+  }
+
+  void _onEurEdited(String _) {
+    setState(() {
+      _eurManual = true;
+      _eurAuto = false;
+      _eurRate = null;
+    });
+  }
+
+  Future<void> _ricalcola() async {
+    _eurManual = false;
+    await _convertNow(force: true);
   }
 
   @override
   void dispose() {
+    _convertDebounce?.cancel();
+    _importo.removeListener(_scheduleConvert);
     _importo.dispose();
     _importoEur.dispose();
     _fornitore.dispose();
@@ -180,6 +248,7 @@ class _SpesaFormScreenState extends State<SpesaFormScreen> {
       _valuta = picked.code;
       _importo.decimalDigits = picked.decimalDigits;
     });
+    _scheduleConvert();
   }
 
   Future<void> _pickData() async {
@@ -189,7 +258,10 @@ class _SpesaFormScreenState extends State<SpesaFormScreen> {
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
     );
-    if (picked != null) setState(() => _data = picked);
+    if (picked != null) {
+      setState(() => _data = picked);
+      _scheduleConvert();
+    }
   }
 
   Future<void> _salva() async {
@@ -221,7 +293,9 @@ class _SpesaFormScreenState extends State<SpesaFormScreen> {
       importo: importo,
       valuta: _valuta,
       importoEur: importoEur,
-      tassoCambio: initial?.tassoCambio,
+      tassoCambio: _valuta == 'EUR'
+          ? null
+          : (_eurAuto && importoEur != null ? _eurRate : null),
       note: _note.text.trim().isEmpty ? null : _note.text.trim(),
       ocrEngine: initial?.ocrEngine ?? _currentParsed?.engine.name,
       createdAt: initial?.createdAt ?? DateTime.now(),
@@ -436,8 +510,20 @@ class _SpesaFormScreenState extends State<SpesaFormScreen> {
               TextFormField(
                 key: const Key('campo-importo-eur'),
                 controller: _importoEur,
-                decoration: const InputDecoration(
-                    labelText: 'Importo EUR (opzionale)'),
+                decoration: InputDecoration(
+                  labelText: 'Importo EUR (opzionale)',
+                  helperText: _eurAuto && _eurRate != null
+                      ? 'AUTO · 1 $_valuta = '
+                          '${_eurRate!.toStringAsFixed(4).replaceAll('.', ',')} €'
+                      : null,
+                  suffixIcon: IconButton(
+                    key: const Key('eur-ricalcola'),
+                    icon: const Icon(Symbols.currency_exchange),
+                    tooltip: 'Ricalcola tasso',
+                    onPressed: _ricalcola,
+                  ),
+                ),
+                onChanged: _onEurEdited,
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
                 validator: (v) {

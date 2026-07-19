@@ -56,4 +56,18 @@ void main() {
       expect(await s.ocrEngineDefault, OcrEngine.mlkit);
     });
   });
+
+  group('tassiOnline', () {
+    test('default is true when unset', () async {
+      SharedPreferences.setMockInitialValues({});
+      expect(await SettingsService().tassiOnline, isTrue);
+    });
+
+    test('setTassiOnline persists false', () async {
+      SharedPreferences.setMockInitialValues({});
+      final service = SettingsService();
+      await service.setTassiOnline(false);
+      expect(await service.tassiOnline, isFalse);
+    });
+  });
 }

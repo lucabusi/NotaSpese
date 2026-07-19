@@ -20,6 +20,8 @@ import 'package:nota_spese/ui/trasferte/trasferte_list_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import 'fakes/fake_exchange_service.dart';
+
 void main() {
   setUpAll(sqfliteFfiInit);
 
@@ -59,6 +61,7 @@ void main() {
           apiKeyProvider: () async => null,
         ),
         settingsService: SettingsService(),
+        exchangeService: FakeExchangeService(),
       ),
     ));
     await tester.pumpAndSettle();

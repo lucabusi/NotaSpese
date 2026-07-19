@@ -7,6 +7,7 @@ import 'data/db/db_helper.dart';
 import 'data/repositories/foto_repository.dart';
 import 'data/repositories/spesa_repository.dart';
 import 'data/repositories/trasferta_repository.dart';
+import 'services/currency/exchange_service.dart';
 import 'services/ocr/claude_ocr_service.dart';
 import 'services/ocr/mlkit_ocr_service.dart';
 import 'services/ocr/receipt_parser.dart';
@@ -43,6 +44,7 @@ void main() {
   final captureService = ReceiptCaptureService();
 
   final apiKeyStore = ApiKeyStore();
+  final exchangeService = ExchangeService(settingsService);
   final orchestrator = RecognitionOrchestrator(
     mlkitOcr: MlkitOcrService(),
     claudeOcr: ClaudeOcrService(apiKeyProvider: apiKeyStore.read),
@@ -59,5 +61,6 @@ void main() {
     orchestrator: orchestrator,
     settingsService: settingsService,
     apiKeyStore: apiKeyStore,
+    exchangeService: exchangeService,
   ));
 }
