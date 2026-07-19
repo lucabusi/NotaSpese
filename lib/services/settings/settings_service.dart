@@ -13,6 +13,7 @@ class SettingsService {
   static const String _kJpgQuality = 'jpg_quality';
   static const String _kPhotoDir = 'photo_dir';
   static const String _kOcrEngine = 'ocr_engine';
+  static const String _kTassiOnline = 'tassi_online';
 
   static const int defaultJpgQuality = 70;
   static const int minJpgQuality = 50;
@@ -47,5 +48,14 @@ class SettingsService {
   Future<void> setOcrEngineDefault(OcrEngine engine) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kOcrEngine, engine.name);
+  }
+
+  /// Fase 6: master switch for frankfurter.app calls (Settings toggle).
+  Future<bool> get tassiOnline async =>
+      (await SharedPreferences.getInstance()).getBool(_kTassiOnline) ?? true;
+
+  Future<void> setTassiOnline(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kTassiOnline, value);
   }
 }
