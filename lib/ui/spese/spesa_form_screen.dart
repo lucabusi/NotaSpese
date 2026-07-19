@@ -175,6 +175,7 @@ class _SpesaFormScreenState extends State<SpesaFormScreen> {
       }
       _currentParsed = result;
     });
+    _scheduleConvert();
   }
 
   @override

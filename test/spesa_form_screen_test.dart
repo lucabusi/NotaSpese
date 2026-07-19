@@ -580,5 +580,42 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Tasso non disponibile'), findsOneWidget);
     });
+
+    testWidgets(
+        'retry con stesso importo ma valuta diversa riconverte con il '
+        'nuovo tasso (regression: _retryOtherEngine deve richiamare '
+        '_scheduleConvert)', (tester) async {
+      final exchange = FakeExchangeService(rate: 0.0061);
+      final retryResult = ParsedReceipt(
+        importo: 1200,
+        valuta: 'USD',
+        data: parsedJpy1200().data,
+        fornitore: parsedJpy1200().fornitore,
+        engine: OcrEngine.claude,
+      );
+      await pumpForm(
+        tester,
+        valutaDefault: 'JPY',
+        exchange: exchange,
+        parsed: parsedJpy1200(),
+        onRetryOtherEngine: () async => retryResult,
+      );
+      await tester.pump(const Duration(milliseconds: 700));
+      await tester.pump();
+      expect(find.text('7,32'), findsOneWidget); // 1200 * 0.0061
+      expect(find.textContaining('AUTO · 1 JPY ='), findsOneWidget);
+
+      // New engine, new currency, new rate: reconversion must be observable.
+      exchange.rate = 0.0090;
+      await tester.tap(find.byKey(const Key('ocr-riprova')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Riprova con altro motore'));
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 700));
+      await tester.pump();
+
+      expect(find.text('10,80'), findsOneWidget); // 1200 * 0.0090
+      expect(find.textContaining('AUTO · 1 USD ='), findsOneWidget);
+    });
   });
 }
