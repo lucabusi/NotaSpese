@@ -131,6 +131,12 @@ void main() {
     await tester.tap(find.text('Impostazioni'));
     await tester.pumpAndSettle();
 
+    // Scroll settings ListView to render version footer (pushed down by rates toggle card).
+    await tester.dragUntilVisible(
+      find.textContaining(appVersion),
+      find.byType(Scrollable).last,
+      const Offset(0, -100),
+    );
     expect(find.textContaining(appVersion), findsOneWidget);
   });
 
