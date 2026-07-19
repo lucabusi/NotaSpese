@@ -137,6 +137,7 @@ class _ImpostazioniMinimalState extends State<ImpostazioniMinimal> {
   final _apiKeyController = TextEditingController();
   bool _configured = false;
   OcrEngine _engineDefault = OcrEngine.mlkit;
+  bool _tassiOnline = true;
 
   @override
   void initState() {
@@ -150,10 +151,12 @@ class _ImpostazioniMinimalState extends State<ImpostazioniMinimal> {
   Future<void> _load() async {
     final key = await widget.apiKeyStore.read();
     final engine = await widget.settingsService.ocrEngineDefault;
+    final tassi = await widget.settingsService.tassiOnline;
     if (!mounted) return;
     setState(() {
       _configured = key != null && key.isNotEmpty;
       _engineDefault = engine;
+      _tassiOnline = tassi;
     });
   }
 
@@ -192,6 +195,12 @@ class _ImpostazioniMinimalState extends State<ImpostazioniMinimal> {
     await widget.settingsService.setOcrEngineDefault(engine);
     if (!mounted) return;
     setState(() => _engineDefault = engine);
+  }
+
+  Future<void> _onTassiOnlineChanged(bool value) async {
+    await widget.settingsService.setTassiOnline(value);
+    if (!mounted) return;
+    setState(() => _tassiOnline = value);
   }
 
   @override
@@ -266,6 +275,17 @@ class _ImpostazioniMinimalState extends State<ImpostazioniMinimal> {
                   ),
                 ],
               ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Card(
+            child: SwitchListTile(
+              key: const Key('toggle-tassi-online'),
+              title: const Text('Tassi di cambio online'),
+              subtitle: const Text(
+                  'Conversione EUR automatica via frankfurter.app (tasso del giorno della spesa)'),
+              value: _tassiOnline,
+              onChanged: _onTassiOnlineChanged,
             ),
           ),
           const SizedBox(height: 16),
