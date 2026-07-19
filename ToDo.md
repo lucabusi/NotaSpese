@@ -120,17 +120,18 @@
 - [x] Con API key assente: Claude Vision non selezionabile/segnala setup; offline: fallback a ML Kit — verificato con widget test (mock `MockClient`, nessun device richiesto)
 - [x] `flutter analyze` → zero issue (2026-07-18)
 
-## Fase 6 — Multi-valuta / conversione EUR ▢
-- [ ] `exchange_service.dart`: conversione via `frankfurter.app` (no key), timeout breve, mai bloccante
-- [ ] Al salvataggio online: `importo_eur` + `tasso_cambio` valorizzati silenziosamente, badge **AUTO** nel form
-- [ ] Offline o preferenza utente: campo EUR editabile manualmente o lasciabile vuoto; pulsante ricalcolo manuale
-- [ ] Toggle "Tassi di cambio online" in Impostazioni
-- [ ] Totali trasferta: somma in valuta originale + conversione EUR se disponibile (spese senza EUR escluse dal totale EUR, indicarlo)
-- [ ] Unit test conversione con http mockato (successo, timeout, offline)
+## Fase 6 — Multi-valuta / conversione EUR ✅ 2026-07-19
+- [x] `exchange_service.dart`: conversione via `frankfurter.app` (no key), timeout breve, mai bloccante (tasso storico alla data della spesa; cache in-memory sessione)
+- [x] Conversione con badge **AUTO** nel form: conversione **live nel form** con debounce (design 2026-07-19), non al salvataggio
+- [x] Offline o preferenza utente: campo EUR editabile manualmente o lasciabile vuoto; pulsante ricalcolo manuale
+- [x] Toggle "Tassi di cambio online" in Impostazioni
+- [x] Totali trasferta: somma in valuta originale + conversione EUR se disponibile (spese senza EUR escluse dal totale EUR, indicarlo) — già implementati in fase 3 (`countSenzaEur` nell'header), nessuna modifica
+- [x] Unit test conversione con http mockato (successo, timeout, offline)
+- ⚠️ Limite: frankfurter copre solo le ~30 valute ECB: **RSD e AED senza conversione automatica** (campo EUR manuale); eventuale API alternativa → v1.1
 
 **Verifica fase 6**
-- [ ] Spesa JPY online → EUR auto compilato; in modalità aereo → campo vuoto editabile, nessun blocco
-- [ ] `flutter test` + `flutter analyze` verdi
+- [ ] Spesa JPY online → EUR auto compilato; in modalità aereo → campo vuoto editabile, nessun blocco — **SKIP esplicito** (ambiente Android incompleto, vedi gotcha in `CLAUDE.md`); compensata da unit + widget test con `MockClient`/fake
+- [x] `flutter test` (252/252) + `flutter analyze` (zero issue) verdi (2026-07-19)
 
 ## Fase 7 — Export CSV / PDF ▢
 - [ ] `csv_export_service.dart`: export flat spese trasferta (tutte le colonne, separatore compatibile Excel IT)
