@@ -8,6 +8,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/utils/formatters.dart';
 import '../../data/models/spesa.dart';
 import '../../data/models/trasferta.dart';
+import '../../services/currency/exchange_service.dart';
 import '../../services/ocr/parsed_receipt.dart';
 import '../../services/ocr/recognition_orchestrator.dart';
 import '../../services/photo/receipt_capture_service.dart';
@@ -34,12 +35,14 @@ class TrasfertaDetailScreen extends StatefulWidget {
     required this.captureService,
     required this.orchestrator,
     required this.settingsService,
+    required this.exchangeService,
   });
 
   final TrasfertaDetailController controller;
   final ReceiptCaptureService captureService;
   final RecognitionOrchestrator orchestrator;
   final SettingsService settingsService;
+  final ExchangeService exchangeService;
 
   @override
   State<TrasfertaDetailScreen> createState() => _TrasfertaDetailScreenState();
@@ -326,6 +329,7 @@ class _TrasfertaDetailScreenState extends State<TrasfertaDetailScreen> {
         photoPathResolver: controller.absolutePhotoPath,
         parsed: parsed,
         onRetryOtherEngine: onRetryOtherEngine,
+        exchange: widget.exchangeService,
         onSave: spesa == null
             ? (s, {nuovaFoto, rimuoviFoto = false}) =>
                 controller.createSpesa(s, fotoSourcePath: nuovaFoto)

@@ -19,6 +19,8 @@ import 'package:nota_spese/services/settings/settings_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import 'fakes/fake_exchange_service.dart';
+
 /// In-memory fake: [ApiKeyStore] wraps FlutterSecureStorage, not
 /// host-testable (see class doc). IndexedStack builds all shell tabs
 /// eagerly, so the Impostazioni tab's initState always runs.
@@ -62,6 +64,7 @@ void main() {
       ),
       settingsService: SettingsService(),
       apiKeyStore: _FakeApiKeyStore(),
+      exchangeService: FakeExchangeService(),
     ));
     await tester.pumpAndSettle();
 

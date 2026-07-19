@@ -4,6 +4,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../data/repositories/foto_repository.dart';
 import '../../data/repositories/spesa_repository.dart';
 import '../../data/repositories/trasferta_repository.dart';
+import '../../services/currency/exchange_service.dart';
 import '../../services/ocr/parsed_receipt.dart';
 import '../../services/ocr/recognition_orchestrator.dart';
 import '../../services/photo/photo_service.dart';
@@ -28,6 +29,7 @@ class HomeShell extends StatefulWidget {
     required this.orchestrator,
     required this.settingsService,
     required this.apiKeyStore,
+    required this.exchangeService,
   });
 
   final TrasfertaRepository trasfertaRepository;
@@ -38,6 +40,7 @@ class HomeShell extends StatefulWidget {
   final RecognitionOrchestrator orchestrator;
   final SettingsService settingsService;
   final ApiKeyStore apiKeyStore;
+  final ExchangeService exchangeService;
 
   @override
   State<HomeShell> createState() => _HomeShellState();
@@ -80,6 +83,7 @@ class _HomeShellState extends State<HomeShell> {
             captureService: widget.captureService,
             orchestrator: widget.orchestrator,
             settingsService: widget.settingsService,
+            exchangeService: widget.exchangeService,
           ),
           TrasferteListScreen(
             controller: _archivioController,
@@ -90,6 +94,7 @@ class _HomeShellState extends State<HomeShell> {
             captureService: widget.captureService,
             orchestrator: widget.orchestrator,
             settingsService: widget.settingsService,
+            exchangeService: widget.exchangeService,
           ),
           ImpostazioniMinimal(
             apiKeyStore: widget.apiKeyStore,

@@ -10,6 +10,33 @@ import 'package:nota_spese/services/ocr/parsed_receipt.dart';
 import 'package:nota_spese/ui/spese/spesa_form_screen.dart';
 import 'package:path/path.dart' as p;
 
+import 'fakes/fake_exchange_service.dart';
+
+/// Shared fixture: 1200 JPY parsed from a receipt (fase 6 EUR conversion
+/// tests).
+ParsedReceipt parsedJpy1200() => ParsedReceipt(
+      importo: 1200,
+      valuta: 'JPY',
+      data: DateTime(2026, 7, 10),
+      fornitore: 'Lawson',
+      lingua: 'ja',
+      engine: OcrEngine.mlkit,
+      rawText: 'x',
+    );
+
+/// Shared fixture: an existing JPY expense with no stored tassoCambio
+/// (manual/no conversion), used by the "no auto-recalc on edit" tests.
+Spesa spesaJpyEsistente({double importo = 1200}) => Spesa(
+      id: 7,
+      trasfertaId: 1,
+      data: DateTime(2026, 7, 10),
+      categoria: Categoria.pranzo,
+      fornitore: 'Lawson',
+      importo: importo,
+      valuta: 'JPY',
+      createdAt: DateTime(2026, 7, 10, 9),
+    );
+
 void main() {
   Spesa? saved;
   String? savedNuovaFoto;
@@ -43,6 +70,7 @@ void main() {
 
   Future<void> pumpForm(
     WidgetTester tester, {
+    String valutaDefault = 'EUR',
     Spesa? initial,
     Foto? initialFoto,
     String? pendingFotoSourcePath,
@@ -51,6 +79,9 @@ void main() {
     bool withDelete = false,
     ParsedReceipt? parsed,
     Future<ParsedReceipt?> Function()? onRetryOtherEngine,
+    FakeExchangeService? exchange,
+    Future<void> Function(Spesa s, {String? nuovaFoto, bool rimuoviFoto})?
+        onSave,
   }) async {
     saved = null;
     savedNuovaFoto = null;
@@ -62,7 +93,7 @@ void main() {
           onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
             builder: (_) => SpesaFormScreen(
               trasfertaId: 1,
-              valutaDefault: 'EUR',
+              valutaDefault: valutaDefault,
               initial: initial,
               initialFoto: initialFoto,
               pendingFotoSourcePath: pendingFotoSourcePath,
@@ -70,11 +101,13 @@ void main() {
               photoPathResolver: photoPathResolver,
               parsed: parsed,
               onRetryOtherEngine: onRetryOtherEngine,
-              onSave: (s, {nuovaFoto, rimuoviFoto = false}) async {
-                saved = s;
-                savedNuovaFoto = nuovaFoto;
-                savedRimuoviFoto = rimuoviFoto;
-              },
+              exchange: exchange ?? FakeExchangeService(),
+              onSave: onSave ??
+                  (s, {nuovaFoto, rimuoviFoto = false}) async {
+                    saved = s;
+                    savedNuovaFoto = nuovaFoto;
+                    savedRimuoviFoto = rimuoviFoto;
+                  },
               onDelete: withDelete ? () async => deleted = true : null,
             ),
           )),
@@ -428,6 +461,124 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(saved!.ocrEngine, 'claude');
+    });
+  });
+
+  group('conversione EUR live', () {
+    testWidgets('pre-fill OCR + debounce → campo EUR AUTO con tasso',
+        (tester) async {
+      final exchange = FakeExchangeService(rate: 0.0061);
+      await pumpForm(tester,
+          valutaDefault: 'JPY',
+          exchange: exchange,
+          parsed: parsedJpy1200());
+      await tester.pump(const Duration(milliseconds: 700));
+      await tester.pump();
+      expect(find.text('7,32'), findsOneWidget); // 1200 * 0.0061 nel campo EUR
+      expect(find.textContaining('AUTO · 1 JPY ='), findsOneWidget);
+      expect(exchange.calls, 1);
+    });
+
+    testWidgets('salvataggio AUTO persiste tassoCambio', (tester) async {
+      Spesa? localSaved;
+      final exchange = FakeExchangeService(rate: 0.0061);
+      await pumpForm(tester,
+          valutaDefault: 'JPY',
+          exchange: exchange,
+          parsed: parsedJpy1200(),
+          onSave: (s, {nuovaFoto, rimuoviFoto = false}) async =>
+              localSaved = s);
+      await tester.pump(const Duration(milliseconds: 700));
+      await tester.pump();
+      await scrollTo(tester, find.byKey(const Key('salva-spesa')));
+      await tester.tap(find.byKey(const Key('salva-spesa')));
+      await tester.pumpAndSettle();
+      expect(localSaved!.tassoCambio, 0.0061);
+      expect(localSaved!.importoEur, closeTo(7.32, 0.001));
+    });
+
+    testWidgets('edit manuale del campo EUR toglie AUTO e azzera tasso',
+        (tester) async {
+      Spesa? localSaved;
+      final exchange = FakeExchangeService(rate: 0.0061);
+      await pumpForm(tester,
+          valutaDefault: 'JPY',
+          exchange: exchange,
+          parsed: parsedJpy1200(),
+          onSave: (s, {nuovaFoto, rimuoviFoto = false}) async =>
+              localSaved = s);
+      await tester.pump(const Duration(milliseconds: 700));
+      await tester.pump();
+      await scrollTo(tester, find.byKey(const Key('campo-importo-eur')));
+      await tester.enterText(
+          find.byKey(const Key('campo-importo-eur')), '8,00');
+      await tester.pump();
+      expect(find.textContaining('AUTO ·'), findsNothing);
+      await scrollTo(tester, find.byKey(const Key('salva-spesa')));
+      await tester.tap(find.byKey(const Key('salva-spesa')));
+      await tester.pumpAndSettle();
+      expect(localSaved!.tassoCambio, isNull);
+      expect(localSaved!.importoEur, 8.0);
+    });
+
+    testWidgets('offline: campo resta vuoto, salvataggio senza EUR ok',
+        (tester) async {
+      Spesa? localSaved;
+      await pumpForm(tester,
+          valutaDefault: 'JPY',
+          exchange: FakeExchangeService(rate: null),
+          parsed: parsedJpy1200(),
+          onSave: (s, {nuovaFoto, rimuoviFoto = false}) async =>
+              localSaved = s);
+      await tester.pump(const Duration(milliseconds: 700));
+      await tester.pump();
+      expect(find.textContaining('AUTO ·'), findsNothing);
+      await scrollTo(tester, find.byKey(const Key('salva-spesa')));
+      await tester.tap(find.byKey(const Key('salva-spesa')));
+      await tester.pumpAndSettle();
+      expect(localSaved!.importoEur, isNull);
+      expect(localSaved!.tassoCambio, isNull);
+    });
+
+    testWidgets('spesa esistente: nessuna conversione automatica',
+        (tester) async {
+      final exchange = FakeExchangeService(rate: 0.0061);
+      await pumpForm(tester,
+          valutaDefault: 'JPY',
+          exchange: exchange,
+          initial: spesaJpyEsistente());
+      await tester.pump(const Duration(milliseconds: 700));
+      await tester.pump();
+      expect(exchange.calls, 0);
+    });
+
+    testWidgets('ricalcola sovrascrive anche il valore manuale',
+        (tester) async {
+      final exchange = FakeExchangeService(rate: 0.0065);
+      await pumpForm(tester,
+          valutaDefault: 'JPY',
+          exchange: exchange,
+          initial: spesaJpyEsistente(importo: 1000));
+      await scrollTo(tester, find.byKey(const Key('campo-importo-eur')));
+      await tester.enterText(
+          find.byKey(const Key('campo-importo-eur')), '9,99');
+      await scrollTo(tester, find.byKey(const Key('eur-ricalcola')));
+      await tester.tap(find.byKey(const Key('eur-ricalcola')));
+      await tester.pumpAndSettle();
+      expect(find.text('6,50'), findsOneWidget); // 1000 * 0.0065
+      expect(find.textContaining('AUTO · 1 JPY ='), findsOneWidget);
+    });
+
+    testWidgets('ricalcola con tasso non disponibile mostra snackbar',
+        (tester) async {
+      await pumpForm(tester,
+          valutaDefault: 'JPY',
+          exchange: FakeExchangeService(rate: null),
+          initial: spesaJpyEsistente());
+      await scrollTo(tester, find.byKey(const Key('eur-ricalcola')));
+      await tester.tap(find.byKey(const Key('eur-ricalcola')));
+      await tester.pumpAndSettle();
+      expect(find.text('Tasso non disponibile'), findsOneWidget);
     });
   });
 }

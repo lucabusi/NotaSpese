@@ -21,6 +21,8 @@ import 'package:nota_spese/version.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import 'fakes/fake_exchange_service.dart';
+
 /// In-memory fake: [ApiKeyStore] wraps FlutterSecureStorage, not
 /// host-testable (see class doc), so tests extend it and override the
 /// three methods instead of touching the platform channel.
@@ -89,6 +91,7 @@ void main() {
         ),
         settingsService: settingsService ?? SettingsService(),
         apiKeyStore: apiKeyStore ?? _FakeApiKeyStore(),
+        exchangeService: FakeExchangeService(),
       ),
     ));
     await tester.pumpAndSettle();
