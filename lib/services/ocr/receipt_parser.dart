@@ -8,6 +8,33 @@ final RegExp _numberToken = RegExp(r'[0-9.,€$¥£]+');
 
 const double _maxPlausibleAmount = 1000000;
 
+final RegExp _spaceChar = RegExp(r'[\s　]+');
+
+/// Normalizes raw OCR text before extraction: full-width ASCII (`５５２０`,
+/// `Ｎｏ`) → half-width, ideographic space → plain space, full-width yen
+/// (`￥`) → `¥`. Japanese receipts printed by taxi/POS terminals use
+/// full-width digits throughout, which otherwise match no number or date
+/// pattern at all.
+String normalizeOcrText(String text) {
+  final buffer = StringBuffer();
+  for (final rune in text.runes) {
+    if (rune >= 0xFF01 && rune <= 0xFF5E) {
+      buffer.writeCharCode(rune - 0xFEE0);
+    } else if (rune == 0x3000) {
+      buffer.write(' ');
+    } else if (rune == 0xFFE5) {
+      buffer.write('¥');
+    } else {
+      buffer.writeCharCode(rune);
+    }
+  }
+  return buffer.toString();
+}
+
+/// Line with every space removed, so keyword matching survives the
+/// letter-spacing receipts use for emphasis (`合  計`, `小 計 額`).
+String _stripSpaces(String line) => line.replaceAll(_spaceChar, '');
+
 /// Parses a single amount-like token (may have a currency symbol attached,
 /// e.g. `€12,50` or `¥1,200`) using the given [format] to decide which
 /// separator is the decimal point. Returns `null` if [token] has no digits.
@@ -41,9 +68,15 @@ double? _valueNearLine(List<String> lines, int index, AmountNumberFormat format)
   return null;
 }
 
+/// Whether the number [match] is a rate rather than an amount, i.e. it is
+/// immediately followed by a percent sign (`10%割引`, `消費税率 10.0%`).
+bool _isPercentToken(String line, RegExpMatch match) =>
+    match.end < line.length && line[match.end] == '%';
+
 double? _rightmostValue(String line, AmountNumberFormat format) {
   final matches = _numberToken.allMatches(line).toList();
   for (var i = matches.length - 1; i >= 0; i--) {
+    if (_isPercentToken(line, matches[i])) continue;
     final v = parseAmountToken(matches[i].group(0)!, format);
     if (v != null) return v;
   }
@@ -62,10 +95,11 @@ bool _containsAny(String lowerLine, List<String> keywords) =>
 /// the matching logic.
 double? _amountViaKeywords(String text, LanguageProfile profile) {
   final lines = text.split('\n');
-  final lowerLines = lines.map((l) => l.toLowerCase()).toList();
+  final lowerLines =
+      lines.map((l) => _stripSpaces(l).toLowerCase()).toList();
 
   for (final keyword in profile.totalKeywords) {
-    final kw = keyword.toLowerCase();
+    final kw = _stripSpaces(keyword).toLowerCase();
     double? best;
     for (var i = 0; i < lines.length; i++) {
       final lower = lowerLines[i];
@@ -86,12 +120,14 @@ double? _amountViaKeywords(String text, LanguageProfile profile) {
 /// keywords, used when no total keyword line yields a value.
 double? _amountViaFallback(String text, LanguageProfile profile) {
   final lines = text.split('\n');
-  final lowerLines = lines.map((l) => l.toLowerCase()).toList();
+  final lowerLines =
+      lines.map((l) => _stripSpaces(l).toLowerCase()).toList();
 
   double? maxPlausible;
   for (var i = 0; i < lines.length; i++) {
     if (_containsAny(lowerLines[i], profile.negativeKeywords)) continue;
     for (final match in _numberToken.allMatches(lines[i])) {
+      if (_isPercentToken(lines[i], match)) continue;
       final v = parseAmountToken(match.group(0)!, profile.numberFormat);
       if (v != null &&
           v > 0 &&
@@ -177,29 +213,72 @@ final RegExp _vendorTelPattern = RegExp(r'\btel\b|\btelefono\b|\btelephone\b|\bp
 final RegExp _vendorUrlPattern = RegExp(r'www\.|http');
 final RegExp _vendorLetterPattern = RegExp(r'\p{L}', unicode: true);
 
+/// Slip/document-type headers printed above the merchant name (receipt,
+/// credit-card sales slip, customer copy, …) — never a vendor name.
+final RegExp _vendorDocTypePattern = RegExp(
+  r'領収書|領収証|レシート|売上票|利用票|お買上票|お客様控|お客さま控|控え|'
+  r'クレジットカード|クレジット売上|receipt|invoice|customer copy',
+);
+
+/// A bare slip number line (`No002`, `No. 99131`) or a date/time-only line:
+/// the top of card slips is full of them before the merchant appears.
+final RegExp _vendorSlipNoPattern = RegExp(r'^no\.?\s*\d+$', caseSensitive: false);
+final RegExp _vendorDateLinePattern = RegExp(r'\d{4}\s*[年/-]\s*\d{1,2}');
+
+/// Label a card slip uses to introduce the merchant name; the value may sit
+/// after the label on the same line or on the next one.
+final RegExp _vendorLabelPattern = RegExp(r'加盟店名?|ご利用店舗|店舗名');
+
 /// Whether [line] looks like noise rather than a vendor name: an address
-/// with a zip code, a VAT number, a phone number, a URL, or a line made up
-/// almost entirely of digits/punctuation (no letters at all).
+/// with a zip code, a VAT number, a phone number, a URL, a document-type
+/// header, a slip number / date line, or a line made up almost entirely of
+/// digits/punctuation (no letters at all).
 bool _isVendorNoiseLine(String line) {
-  final lower = line.toLowerCase();
+  final lower = _stripSpaces(line).toLowerCase();
   if (_vendorZipPattern.hasMatch(lower)) return true;
   if (_vendorPIvaPattern.hasMatch(lower)) return true;
-  if (_vendorTelPattern.hasMatch(lower)) return true;
+  if (_vendorTelPattern.hasMatch(line.toLowerCase())) return true;
   if (_vendorUrlPattern.hasMatch(lower)) return true;
+  if (_vendorDocTypePattern.hasMatch(lower)) return true;
+  if (_vendorSlipNoPattern.hasMatch(lower)) return true;
+  if (_vendorDateLinePattern.hasMatch(lower)) return true;
   if (!_vendorLetterPattern.hasMatch(line)) return true;
   return false;
 }
 
-/// Extracts the vendor/merchant name from raw OCR [text]: the first of the
-/// first three non-empty lines that doesn't look like noise (see
-/// [_isVendorNoiseLine]), trimmed. Returns `null` if none survive.
+/// Merchant name taken from an explicit `加盟店名` (merchant name) label,
+/// which card slips print instead of a letterhead: the text after the label
+/// on the same line, else the next non-empty line. Trailing operator fields
+/// (`／係員473`) are cut off.
+String? _vendorFromLabel(List<String> lines) {
+  for (var i = 0; i < lines.length; i++) {
+    final match = _vendorLabelPattern.firstMatch(lines[i]);
+    if (match == null) continue;
+    var value = lines[i].substring(match.end).replaceFirst(RegExp(r'^[:：\s]+'), '');
+    if (value.trim().isEmpty && i + 1 < lines.length) {
+      value = lines[i + 1];
+    }
+    value = value.split(RegExp(r'[/／]')).first.trim();
+    if (value.isNotEmpty && _vendorLetterPattern.hasMatch(value)) return value;
+  }
+  return null;
+}
+
+/// Extracts the vendor/merchant name from raw OCR [text]: an explicit
+/// merchant label if present (see [_vendorFromLabel]), else the first of the
+/// first six non-empty lines that doesn't look like noise (see
+/// [_isVendorNoiseLine]), trimmed. The window is six lines because slips
+/// print several document-type/number lines above the merchant name.
+/// Returns `null` if none survive.
 String? extractVendor(String text) {
-  final candidateLines = text
+  final lines = text
       .split('\n')
       .map((line) => line.trim())
       .where((line) => line.isNotEmpty)
-      .take(3);
-  for (final line in candidateLines) {
+      .toList();
+  final labelled = _vendorFromLabel(lines);
+  if (labelled != null) return labelled;
+  for (final line in lines.take(6)) {
     if (!_isVendorNoiseLine(line)) return line;
   }
   return null;
@@ -241,8 +320,9 @@ int _scoreProfile(
   }
   if (data != null) score += 1;
   if (fornitore != null) score += 1;
-  final lower = text.toLowerCase();
-  if (profile.totalKeywords.any((k) => lower.contains(k.toLowerCase()))) {
+  final lower = _stripSpaces(text).toLowerCase();
+  if (profile.totalKeywords
+      .any((k) => lower.contains(_stripSpaces(k).toLowerCase()))) {
     score += 1;
   }
   return score;
@@ -274,7 +354,8 @@ List<String> _candidateOrder(String text, String? linguaHint) {
 /// always [OcrEngine.mlkit]; callers that used the Claude fallback should
 /// `copyWith(engine: OcrEngine.claude)`.
 class ReceiptParser {
-  ParsedReceipt parse(String text, {String? linguaHint}) {
+  ParsedReceipt parse(String rawText, {String? linguaHint}) {
+    final text = normalizeOcrText(rawText);
     try {
       final fornitore = extractVendor(text);
       String? bestCode;
@@ -311,10 +392,10 @@ class ReceiptParser {
         fornitore: fornitore,
         lingua: bestCode,
         engine: OcrEngine.mlkit,
-        rawText: text,
+        rawText: rawText,
       );
     } catch (_) {
-      return ParsedReceipt(engine: OcrEngine.mlkit, rawText: text);
+      return ParsedReceipt(engine: OcrEngine.mlkit, rawText: rawText);
     }
   }
 }

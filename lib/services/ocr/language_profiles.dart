@@ -37,8 +37,12 @@ class LanguageProfile {
 final RegExp _dmySlashOrDash = RegExp(r'\b(\d{1,2})[/-](\d{1,2})[/-](\d{4})\b');
 final RegExp _mdySlash = RegExp(r'\b(\d{1,2})/(\d{1,2})/(\d{4})\b');
 final RegExp _dmyDot = RegExp(r'\b(\d{1,2})\.(\d{1,2})\.(\d{4})\b');
-final RegExp _jaKanjiDate = RegExp(r'(\d{4})年(\d{1,2})月(\d{1,2})日');
+// Spaces are optional around every separator: receipts right-align the
+// day/month fields (`2026年 7月 5日`).
+final RegExp _jaKanjiDate =
+    RegExp(r'(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日');
 final RegExp _jaSlashDate = RegExp(r'\b(\d{4})/(\d{1,2})/(\d{1,2})\b');
+final RegExp _isoDashDate = RegExp(r'\b(\d{4})-(\d{1,2})-(\d{1,2})\b');
 
 final Map<String, LanguageProfile> languageProfiles = {
   'it': LanguageProfile(
@@ -62,11 +66,41 @@ final Map<String, LanguageProfile> languageProfiles = {
   ),
   'ja': LanguageProfile(
     code: 'ja',
-    totalKeywords: ['合計', '総計', 'お会計'],
-    negativeKeywords: ['小計', 'お預り', 'お釣', '釣銭', '税'],
+    // Most specific first: a receipt that prints both `合計金額` and a bare
+    // `計` must resolve on the former. `計` is last because it is a
+    // substring of many labels and only wins when nothing better exists
+    // (taxi slips print just `計 5520円`).
+    totalKeywords: [
+      '合計金額',
+      'お買上計',
+      'お買上げ計',
+      '買上金額',
+      '取引金額',
+      'お会計',
+      '合計',
+      '総計',
+      '計',
+    ],
+    negativeKeywords: [
+      '小計',
+      'お預り',
+      'お預かり',
+      'お釣',
+      '釣銭',
+      '税',
+      '点数',
+      '対象',
+      'ポイント',
+      '累計',
+      '割引',
+      '番号',
+      'tel',
+      '電話',
+    ],
     datePatterns: [
       ReceiptDatePattern(_jaKanjiDate, 'ymd'),
       ReceiptDatePattern(_jaSlashDate, 'ymd'),
+      ReceiptDatePattern(_isoDashDate, 'ymd'),
     ],
     numberFormat: AmountNumberFormat.integerOnly,
     defaultCurrency: 'JPY',

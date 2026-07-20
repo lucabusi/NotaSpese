@@ -4,6 +4,63 @@ import 'package:nota_spese/services/ocr/parsed_receipt.dart';
 import 'package:nota_spese/services/ocr/receipt_parser.dart';
 
 void main() {
+  // Real JP receipts (see test/real_receipts_accuracy_test.dart) print
+  // full-width digits, letter-spaced keywords and percentages next to the
+  // total; these are the unit-level guards for that handling.
+  group('normalizeOcrText', () {
+    test('full-width digits and latin become half-width', () {
+      expect(normalizeOcrText('計 ５５２０円 Ｎｏ００２'), '計 5520円 No002');
+    });
+
+    test('ideographic space and full-width yen normalized', () {
+      expect(normalizeOcrText('合　計 ￥1,489'), '合 計 ¥1,489');
+    });
+
+    test('kana and kanji left untouched', () {
+      expect(normalizeOcrText('ヨークベニマル 領収証'), 'ヨークベニマル 領収証');
+    });
+  });
+
+  group('ja receipts - spacing, full-width and percent handling', () {
+    final ja = languageProfiles['ja']!;
+
+    test('letter-spaced total keyword still matches', () {
+      const text = '小 計 額   ¥1,710\n合  計   ¥1,710';
+      expect(extractAmount(text, ja), 1710);
+    });
+
+    test('bare 計 total on a full-width taxi slip', () {
+      final text = normalizeOcrText('定額  ５５２０円\n計  ５５２０円');
+      expect(extractAmount(text, ja), 5520);
+    });
+
+    test('percentage next to a keyword is not taken as the total', () {
+      const text = '次回のお会計から「10%割引」\n合計   ¥17,780';
+      expect(extractAmount(text, ja), 17780);
+    });
+
+    test('spaced kanji date parsed', () {
+      expect(
+        extractDate('2026年 7月 5日(日) 20:07', ja, now: DateTime(2026, 7, 20)),
+        DateTime(2026, 7, 5),
+      );
+    });
+
+    test('ISO dashed date parsed', () {
+      expect(
+        extractDate('2026-07-11 22:11:07', ja, now: DateTime(2026, 7, 20)),
+        DateTime(2026, 7, 11),
+      );
+    });
+
+    test('merchant label wins over document-type header lines', () {
+      const text = '[クレジットカードご利用票]\n'
+          '加盟店名:      ユニオン コマース\n'
+          'ご利用日時: 2026/07/11 14:55:07';
+      expect(extractVendor(text), 'ユニオン コマース');
+    });
+  });
+
   group('parseAmountToken', () {
     test('commaDecimal: 1.234,56 -> 1234.56', () {
       expect(
@@ -225,8 +282,14 @@ void main() {
       expect(extractVendor(text), 'Caffetteria Gamma');
     });
 
-    test('only first 3 non-empty lines considered, all noisy -> null', () {
+    test('vendor below noisy header lines is still found (6-line window)', () {
       const text = '12345\nTel: 0212345\nwww.site.it\nVendor Name';
+      expect(extractVendor(text), 'Vendor Name');
+    });
+
+    test('only first 6 non-empty lines considered, all noisy -> null', () {
+      const text = '12345\nTel: 0212345\nwww.site.it\n'
+          '99999\nTel: 0298765\nhttp://a.b\nVendor Name';
       expect(extractVendor(text), null);
     });
 

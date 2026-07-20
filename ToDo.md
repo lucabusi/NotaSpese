@@ -133,6 +133,64 @@
 - [ ] Spesa JPY online → EUR auto compilato; in modalità aereo → campo vuoto editabile, nessun blocco — **SKIP esplicito** (ambiente Android incompleto, vedi gotcha in `CLAUDE.md`); compensata da unit + widget test con `MockClient`/fake
 - [x] `flutter test` (252/252) + `flutter analyze` (zero issue) verdi (2026-07-19)
 
+## Fase 6b — Collaudo su dispositivo reale + bugfix ▢
+
+> Prima fase con l'app in mano all'utente: installazione dell'APK (build GitHub Actions) su dispositivo Android reale, uso in ambiente reale e fix dei bug rilevati. Recupera anche tutte le verifiche **SKIP esplicito** accumulate nelle fasi 0b-6 (ambiente Android incompleto sulla macchina dev).
+
+- [ ] Installare l'APK release (artifact GitHub Actions, v0.7.0+7 o successiva) sul dispositivo reale
+- [ ] Collaudo del flusso core: scatta scontrino → scanner/crop → OCR → form pre-compilato → salva → foto in lista → viewer → elimina
+- [ ] Recupero verifiche SKIP delle fasi precedenti:
+  - [ ] App parte senza crash, tema corretto (fase 0b)
+  - [ ] CRUD trasferte completo senza crash (fase 2)
+  - [ ] Spesa manuale: crea → lista → totali → modifica → elimina (fase 3)
+  - [ ] Foto: scatto → salva → thumbnail → viewer → eliminazione file dal filesystem; API Document Scanner (beta) funzionante o fallback camera (fase 4)
+  - [ ] OCR scontrino reale IT: form pre-compilato corretto; verificare limitazione script latino ML Kit su JA (decision point in `mlkit_ocr_service.dart`) (fase 5)
+  - [ ] Conversione EUR: spesa JPY/USD online → EUR auto; modalità aereo → campo vuoto editabile, nessun blocco (fase 6)
+- [ ] Raccolta bug: ogni anomalia rilevata dall'utente registrata qui sotto come checkbox (data, passi per riprodurre, comportamento atteso vs osservato)
+- [ ] Fix dei bug raccolti: causa radice (`systematic-debugging`), test di regressione dove la logica è testabile su host, niente fix sintomatici
+- [ ] Bump versione a ogni ciclo di fix distribuito; nuova APK via push su main
+
+- [x] Parser JP irrobustito su 14 scontrini giapponesi reali (`scontrini_training/`, non versionati): fullwidth, keyword spaziate, `お買上計`/`計`/`取引金額`, date con spazi e ISO, percentuali, vendor da `加盟店名` — accuratezza field-level 60,7% → 100% (2026-07-20, v0.7.1)
+
+### Bug rilevati (da compilare durante il collaudo)
+- _(nessuno ancora — aggiungere qui)_
+
+**Verifica fase 6b**
+- [ ] Flusso core completo eseguito su dispositivo reale senza crash né bug bloccanti
+- [ ] Tutti i bug raccolti fixati o esplicitamente rimandati (con motivazione) a v1.1
+- [ ] `flutter test` + `flutter analyze` verdi dopo i fix
+
+## Fase 6c — Training e affinamento parser su scontrini reali (JP) ▢
+
+> Dataset: 14 foto di scontrini giapponesi in `scontrini_training/` (`scontrino_JP_01..14.jpg`). Obiettivo: misurare l'accuratezza del parser fase 5 su scontrini reali e affinare le regole di riconoscimento (importo, data, valuta, esercente, voto lingua). Vincolo: ML Kit OCR non è eseguibile su questa macchina (gotcha ambiente Android in `CLAUDE.md`) → il testo si ottiene per trascrizione fedele delle foto (simulando l'output OCR, rumore incluso); la verifica con OCR reale on-device resta in fase 6b. Metodo estendibile in seguito ad altre lingue.
+
+- [ ] Trascrivere ogni immagine in fixture `.txt` (riga per riga, layout e rumore fedeli allo scontrino) in `test/fixtures/receipts/training/jp/`
+- [ ] Per ogni fixture, `.expected.json` con ground truth verificata a mano (importo, valuta, data, esercente, lingua)
+- [ ] Baseline: eseguire il parser sulle 14 fixture e registrare l'accuratezza per campo (importo / data / valuta / esercente / lingua)
+- [ ] Analisi errori: classificare i miss per causa (keyword totale mancante, formato data non coperto, decimali, voto lingua, rumore OCR)
+- [ ] Affinare le regole in `receipt_parser.dart` / `language_profiles.dart` (es. keyword totale JA aggiuntive, pattern data, euristiche layout) — modifiche chirurgiche, zero regressioni sulle fixture esistenti
+- [ ] Promuovere le 14 fixture a regression test permanenti (suite fixture esistente o file dedicato)
+- [ ] Documentare regole nuove/modificate ed eventuali gotcha in `Specifiche.md` / `CLAUDE.md`
+
+**Verifica fase 6c**
+- [ ] Accuratezza post-affinamento sulle 14 fixture: importo ≥ 12/14, data ≥ 12/14, valuta 14/14 (JPY), lingua 14/14 — soglie riviste se il dataset reale si rivela più rumoroso del previsto (motivare)
+- [ ] `flutter test` verde (fixture esistenti + nuove) + `flutter analyze` zero issue
+
+## Fase 6d — Crop immagine post-scatto ▢
+
+> Recupera il pulsante "✎ Edit" / `image_cropper` rimandato in fase 4: possibilità di ritagliare la foto **dopo lo scatto e prima del salvataggio e del parsing OCR**, così il parser lavora solo sull'area dello scontrino. Vale per tutti i percorsi di acquisizione (scanner ML Kit, camera fallback, galleria).
+
+- [ ] Integrare `image_cropper` (o equivalente) nel punto di aggancio previsto in `receipt_capture_service.dart` (commento `[NON-BLOCKING]` fase 4)
+- [ ] Flusso: scatto/selezione → schermata crop (rotazione + ritaglio libero) → conferma → compressione/salvataggio (`photo_service.dart`) → OCR/parsing sull'immagine croppata
+- [ ] Crop opzionale e skippabile: annulla/salta → si procede con l'immagine originale, mai bloccare il flusso
+- [ ] Percorso scanner ML Kit: crop già incluso nello scanner → schermata crop aggiuntiva non riproposta (evitare doppio crop); percorsi camera/galleria: crop sempre offerto
+- [ ] Possibilità di ri-croppare dal form di conferma prima di "riprova OCR" (il retry usa l'immagine croppata)
+- [ ] Test: unit/widget test del flusso capture→crop→salva e capture→skip crop→salva (crop UI fake/mockata, pipeline compressione già unit-testata)
+
+**Verifica fase 6d**
+- [ ] Widget test verdi su entrambi i rami (con e senza crop); `flutter analyze` zero issue
+- [ ] Su dispositivo reale (quando disponibile, con fase 6b): scatto → crop → OCR sul ritaglio → form pre-compilato
+
 ## Fase 7 — Export CSV / PDF ▢
 - [ ] `csv_export_service.dart`: export flat spese trasferta (tutte le colonne, separatore compatibile Excel IT)
 - [ ] `pdf_export_service.dart`: copertina (trasferta, periodo, totali) + tabella spese + pagine foto scontrini
