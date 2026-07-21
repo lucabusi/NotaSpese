@@ -101,7 +101,7 @@ void main() {
     expect(c.totaleEur, 20);
     expect(c.countSenzaEur, 1);
     expect(c.totaliPerValuta, {'JPY': 3000.0, 'EUR': 20.0});
-    expect(c.totaliEurPerCategoria, {Categoria.taxi: 20.0});
+    expect(c.totaliPerCategoria, {Categoria.taxi: 20.0});
     expect(c.fotoBySpesa, isEmpty);
   });
 
@@ -112,7 +112,7 @@ void main() {
     await c.createSpesa(spesaEur());
     expect(c.speseByData, hasLength(1));
     expect(c.totaleEur, 40);
-    expect(c.totaliEurPerCategoria, {Categoria.cena: 40.0});
+    expect(c.totaliPerCategoria, {Categoria.cena: 40.0});
 
     final salvata = c.speseByData.values.first.first;
     await c.updateSpesa(Spesa(
@@ -126,12 +126,12 @@ void main() {
       createdAt: salvata.createdAt,
     ));
     expect(c.totaleEur, 25);
-    expect(c.totaliEurPerCategoria, {Categoria.pranzo: 25.0});
+    expect(c.totaliPerCategoria, {Categoria.pranzo: 25.0});
 
     await c.deleteSpesa(salvata.id!);
     expect(c.speseByData, isEmpty);
     expect(c.totaleEur, 0);
-    expect(c.totaliEurPerCategoria, isEmpty);
+    expect(c.totaliPerCategoria, isEmpty);
   });
 
   test('photo lifecycle: attach on create, replace, remove, delete spesa',
@@ -181,5 +181,61 @@ void main() {
 
     await c.elimina();
     expect(await trasfertaRepo.getById(trasfertaId), isNull);
+  });
+
+  test('single currency: valutaUnica set, categorie in that currency',
+      () async {
+    await spesaRepo.insert(Spesa(
+      trasfertaId: trasfertaId,
+      data: DateTime(2026, 7, 11),
+      categoria: Categoria.cena,
+      importo: 3000,
+      valuta: 'JPY',
+      createdAt: DateTime(2026, 7, 11, 20),
+    ));
+
+    final c = controller();
+    await c.load();
+
+    expect(c.valutaUnica, 'JPY');
+    expect(c.valutaCategorie, 'JPY');
+    expect(c.totaliPerCategoria, {Categoria.cena: 3000.0});
+  });
+
+  test('two currencies: valutaUnica null, categorie fall back to EUR',
+      () async {
+    await spesaRepo.insert(Spesa(
+      trasfertaId: trasfertaId,
+      data: DateTime(2026, 7, 11),
+      categoria: Categoria.cena,
+      importo: 3000,
+      valuta: 'JPY',
+      importoEur: 18,
+      createdAt: DateTime(2026, 7, 11, 20),
+    ));
+    await spesaRepo.insert(Spesa(
+      trasfertaId: trasfertaId,
+      data: DateTime(2026, 7, 12),
+      categoria: Categoria.taxi,
+      importo: 20,
+      valuta: 'EUR',
+      importoEur: 20,
+      createdAt: DateTime(2026, 7, 12, 9),
+    ));
+
+    final c = controller();
+    await c.load();
+
+    expect(c.valutaUnica, isNull);
+    expect(c.valutaCategorie, 'EUR');
+    expect(c.totaliPerCategoria, {Categoria.cena: 18.0, Categoria.taxi: 20.0});
+  });
+
+  test('no spese: valutaUnica null and categorie empty', () async {
+    final c = controller();
+    await c.load();
+
+    expect(c.valutaUnica, isNull);
+    expect(c.totaliPerCategoria, isEmpty);
   });
 }

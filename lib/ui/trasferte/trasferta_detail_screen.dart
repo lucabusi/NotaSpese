@@ -379,10 +379,12 @@ class _TrasfertaDetailScreenState extends State<TrasfertaDetailScreen> {
                   padding: const EdgeInsets.all(16),
                   children: [
                     _TotalsHeader(controller: controller),
-                    if (controller.totaliEurPerCategoria.isNotEmpty) ...[
+                    if (controller.totaliPerCategoria.isNotEmpty) ...[
                       const SizedBox(height: 12),
                       _CategoryTotals(
-                          totali: controller.totaliEurPerCategoria),
+                        totali: controller.totaliPerCategoria,
+                        valuta: controller.valutaCategorie,
+                      ),
                     ],
                     const SizedBox(height: 16),
                     if (controller.speseByData.isEmpty)
@@ -434,44 +436,61 @@ class _TotalsHeader extends StatelessWidget {
             Text('Totale trasferta',
                 style: textTheme.labelMedium
                     ?.copyWith(color: AppColors.textSecondary)),
-            Text(
-              formatEur(controller.totaleEur),
-              style: textTheme.headlineMedium?.copyWith(
-                fontFeatures: amountFontFeatures,
-                fontWeight: FontWeight.w800,
+            for (final e in _righeValuta())
+              Text(
+                formatValuta(e.value, e.key),
+                style: textTheme.headlineMedium?.copyWith(
+                  fontFeatures: amountFontFeatures,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
-            ),
+            // The EUR line is a hint, not the total: hidden when there is
+            // nothing converted (would read as a zeroed trip) and when EUR
+            // is already the only currency shown above.
+            if (controller.totaleEur > 0 && controller.valutaUnica != 'EUR')
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  '≈ ${formatEur(controller.totaleEur)}',
+                  style: textTheme.bodySmall
+                      ?.copyWith(color: AppColors.textSecondary),
+                ),
+              ),
             if (controller.countSenzaEur > 0)
               Text(
                 '${controller.countSenzaEur} spese senza conversione EUR',
                 style: textTheme.bodySmall
                     ?.copyWith(color: AppColors.textTertiary),
               ),
-            if (controller.totaliPerValuta.length > 1 ||
-                (controller.totaliPerValuta.isNotEmpty &&
-                    !controller.totaliPerValuta.containsKey('EUR')))
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  controller.totaliPerValuta.entries
-                      .map((e) => '${e.key} ${formatImporto(e.value)}')
-                      .join(' · '),
-                  style: textTheme.bodySmall
-                      ?.copyWith(color: AppColors.textSecondary),
-                ),
-              ),
           ],
         ),
       ),
     );
   }
+
+  /// Trip currency first, then the others by descending amount. With no
+  /// spese at all, a single zero row in the trip's own currency.
+  List<MapEntry<String, double>> _righeValuta() {
+    final totali = controller.totaliPerValuta;
+    final valutaTrasferta = controller.trasferta?.valutaDefault ?? 'EUR';
+    if (totali.isEmpty) return [MapEntry(valutaTrasferta, 0)];
+    final entries = totali.entries.toList()
+      ..sort((a, b) {
+        if (a.key == valutaTrasferta) return -1;
+        if (b.key == valutaTrasferta) return 1;
+        return b.value.compareTo(a.value);
+      });
+    return entries;
+  }
 }
 
-/// Per-category EUR totals with proportional bars (mockup "barre").
+/// Per-category totals (trip currency, or EUR when spese mix currencies)
+/// with proportional bars (mockup "barre").
 class _CategoryTotals extends StatelessWidget {
-  const _CategoryTotals({required this.totali});
+  const _CategoryTotals({required this.totali, required this.valuta});
 
   final Map<Categoria, double> totali;
+  final String valuta;
 
   @override
   Widget build(BuildContext context) {
@@ -485,7 +504,7 @@ class _CategoryTotals extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Totali per categoria (EUR)',
+            Text('Totali per categoria ($valuta)',
                 style: textTheme.labelMedium
                     ?.copyWith(color: AppColors.textSecondary)),
             const SizedBox(height: 8),
@@ -513,7 +532,7 @@ class _CategoryTotals extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      formatEur(e.value),
+                      formatValuta(e.value, valuta),
                       style: textTheme.bodySmall?.copyWith(
                         fontFeatures: amountFontFeatures,
                         fontWeight: FontWeight.w700,

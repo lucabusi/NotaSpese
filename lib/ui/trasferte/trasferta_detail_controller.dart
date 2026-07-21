@@ -28,12 +28,20 @@ class TrasfertaDetailController extends ChangeNotifier {
   double totaleEur = 0;
   int countSenzaEur = 0;
   Map<String, double> totaliPerValuta = {};
-  Map<Categoria, double> totaliEurPerCategoria = {};
+  Map<Categoria, double> totaliPerCategoria = {};
   Map<int, Foto> fotoBySpesa = {};
 
   /// Absolute thumbnail paths, resolved at load time so tiles never build
   /// a new Future per frame (FutureBuilder rebuild-loop gotcha).
   Map<int, String> thumbAbsBySpesa = {};
+
+  /// The trip's only currency, or null when spese mix currencies (or there
+  /// are none): totals in different currencies must never be summed.
+  String? get valutaUnica =>
+      totaliPerValuta.length == 1 ? totaliPerValuta.keys.first : null;
+
+  /// Currency the per-category totals are expressed in.
+  String get valutaCategorie => valutaUnica ?? 'EUR';
 
   Future<void> load() async {
     loading = true;
@@ -44,8 +52,9 @@ class TrasfertaDetailController extends ChangeNotifier {
     totaleEur = await _spesaRepository.totaleEur(trasfertaId);
     countSenzaEur = await _spesaRepository.countSenzaEur(trasfertaId);
     totaliPerValuta = await _spesaRepository.totaliPerValuta(trasfertaId);
-    totaliEurPerCategoria =
-        await _spesaRepository.totaliEurPerCategoria(trasfertaId);
+    totaliPerCategoria = valutaUnica == null
+        ? await _spesaRepository.totaliEurPerCategoria(trasfertaId)
+        : await _spesaRepository.totaliPerCategoria(trasfertaId);
     final fotoList = await _fotoRepository.getByTrasferta(trasfertaId);
     fotoBySpesa = {for (final foto in fotoList) foto.spesaId: foto};
     thumbAbsBySpesa = {

@@ -176,6 +176,64 @@ void main() {
     expect(find.text('€ 0,00'), findsOneWidget);
   });
 
+  testWidgets('header shows the original currency first, EUR as a hint',
+      (tester) async {
+    await spesaRepo.insert(Spesa(
+      trasfertaId: trasfertaId,
+      data: DateTime(2026, 7, 11),
+      categoria: Categoria.cena,
+      importo: 3000,
+      valuta: 'JPY',
+      importoEur: 17.9,
+      createdAt: DateTime(2026, 7, 11, 21),
+    ));
+
+    await pump(tester);
+
+    // Amount appears twice: trip total in the header + the (only) category
+    // bar, both 3000.
+    expect(find.text('¥ 3.000'), findsWidgets);
+    expect(find.text('≈ € 17,90'), findsOneWidget);
+    expect(find.text('Totali per categoria (JPY)'), findsOneWidget);
+  });
+
+  testWidgets('no EUR conversion: no euro line at all, never € 0,00',
+      (tester) async {
+    await spesaRepo.insert(Spesa(
+      trasfertaId: trasfertaId,
+      data: DateTime(2026, 7, 11),
+      categoria: Categoria.cena,
+      importo: 3000,
+      valuta: 'JPY',
+      createdAt: DateTime(2026, 7, 11, 21),
+    ));
+
+    await pump(tester);
+
+    // Amount appears twice: trip total in the header + the (only) category
+    // bar, both 3000.
+    expect(find.text('¥ 3.000'), findsWidgets);
+    expect(find.textContaining('≈ €'), findsNothing);
+    expect(find.text('€ 0,00'), findsNothing);
+    expect(find.text('1 spese senza conversione EUR'), findsOneWidget);
+  });
+
+  testWidgets('single EUR currency: no redundant ≈ € line', (tester) async {
+    await spesaRepo.insert(Spesa(
+      trasfertaId: trasfertaId,
+      data: DateTime(2026, 7, 11),
+      categoria: Categoria.cena,
+      importo: 12,
+      valuta: 'EUR',
+      importoEur: 12,
+      createdAt: DateTime(2026, 7, 11, 21),
+    ));
+
+    await pump(tester);
+
+    expect(find.textContaining('≈ €'), findsNothing);
+  });
+
   testWidgets('lists spese grouped by date', (tester) async {
     await spesaRepo.insert(Spesa(
       trasfertaId: trasfertaId,
@@ -190,7 +248,8 @@ void main() {
     await pump(tester);
 
     expect(find.text('11/07/2026'), findsOneWidget);
-    expect(find.text('Cena'), findsOneWidget);
+    // "Cena" appears twice: category bar label + spesa tile subtitle.
+    expect(find.text('Cena'), findsWidgets);
     // Amount appears twice: per-currency total in the header + spesa tile.
     expect(find.textContaining('3.000'), findsWidgets);
     expect(find.text('Nessuna spesa registrata'), findsNothing);
