@@ -14,10 +14,10 @@ Spec di riferimento: `docs/superpowers/specs/2026-07-21-importo-primario-valuta-
 
 - Lingua: codice, nomi e commenti in inglese; stringhe UI in italiano.
 - `flutter analyze` deve restare a zero issue dopo ogni task.
-- Bump di `appVersion` in `lib/version.dart` + `version:` in `pubspec.yaml` una sola volta, nel Task 8. Versione target: **0.8.0+10**.
+- Bump di `appVersion` in `lib/version.dart` + `version:` in `pubspec.yaml` una sola volta, nel Task 6 (l'ultimo). Versione target: **0.8.0+10**.
 - Nessuna migrazione DB, nessuna modifica a `lib/data/db/db_helper.dart`.
 - Modifiche chirurgiche: non toccare file fuori da quelli elencati in ogni task.
-- **Commit:** questo progetto committa solo su richiesta esplicita dell'utente. Gli step "Commit" di questo piano vanno eseguiti solo se l'utente lo ha autorizzato; altrimenti fermarsi al verde di `flutter test` e riferire.
+- **Commit:** l'utente ha autorizzato un commit per task, direttamente su `main` (2026-07-21). Esegui gli step "Commit". Nessun push: quello resta su richiesta esplicita. Mai `--force`, `reset --hard` o `--no-verify`.
 - Comando test mirato: `flutter test test/<file>.dart --plain-name "<nome test>"`.
 
 ---
@@ -186,14 +186,18 @@ git commit -m "feat: per-category totals in the original currency"
 
 ---
 
-### Task 3: Controller dettaglio — valuta unica e sorgente categorie
+### Task 3: Dettaglio — controller e UI dei totali
+
+Controller e schermata cambiano insieme: il campo `totaliEurPerCategoria`
+sparisce, quindi separarli lascerebbe il progetto non compilabile a metà.
 
 **Files:**
 - Modify: `lib/ui/trasferte/trasferta_detail_controller.dart:28-57`
-- Test: `test/trasferta_detail_controller_test.dart`
+- Modify: `lib/ui/trasferte/trasferta_detail_screen.dart:382-385` (uso del campo categorie), `:420-468` (`_TotalsHeader`), `:471-530` (`_CategoryTotals`)
+- Test: `test/trasferta_detail_controller_test.dart`, `test/trasferta_detail_screen_test.dart`
 
 **Interfaces:**
-- Consumes: `SpesaRepository.totaliPerValuta`, `.totaliPerCategoria` (Task 2), `.totaliEurPerCategoria`.
+- Consumes: `SpesaRepository.totaliPerValuta`, `.totaliPerCategoria` (Task 2), `.totaliEurPerCategoria`; `formatValuta` (Task 1).
 - Produces:
   - `String? get valutaUnica` — codice ISO se `totaliPerValuta` ha esattamente una chiave, altrimenti `null`.
   - `Map<Categoria, double> totaliPerCategoria` — **sostituisce** il campo `totaliEurPerCategoria`; contiene importi in `valutaUnica` se non nullo, altrimenti importi EUR.
@@ -300,32 +304,13 @@ In `load()` sostituisci le due righe delle categorie:
 
 Nota d'ordine: `totaliPerValuta` va assegnato **prima**, perché `valutaUnica` lo legge.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [ ] **Step 4: Run controller tests to verify they pass**
 
 Run: `flutter test test/trasferta_detail_controller_test.dart`
 Expected: PASS.
-Nota: `flutter analyze` segnalerà ora un errore in `trasferta_detail_screen.dart` (usa ancora `totaliEurPerCategoria`): è atteso, lo risolve il Task 4.
+`flutter analyze` è ancora rosso su `trasferta_detail_screen.dart` (usa il campo appena rimosso): lo sistemano gli step 5-8 di questo stesso task. Non committare qui.
 
-- [ ] **Step 5: Commit** *(solo se autorizzato)*
-
-```bash
-git add lib/ui/trasferte/trasferta_detail_controller.dart test/trasferta_detail_controller_test.dart
-git commit -m "feat: detail controller exposes the trip single currency"
-```
-
----
-
-### Task 4: Header e categorie della schermata dettaglio
-
-**Files:**
-- Modify: `lib/ui/trasferte/trasferta_detail_screen.dart:382-385` (uso del campo categorie), `:420-468` (`_TotalsHeader`), `:471-530` (`_CategoryTotals`)
-- Test: `test/trasferta_detail_screen_test.dart`
-
-**Interfaces:**
-- Consumes: `formatValuta` (Task 1); `TrasfertaDetailController.totaliPerValuta`, `.valutaUnica`, `.valutaCategorie`, `.totaliPerCategoria`, `.totaleEur`, `.countSenzaEur`, `.trasferta` (Task 3).
-- Produces: nessuna API pubblica nuova (widget privati).
-
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 5: Write the failing widget test**
 
 In `test/trasferta_detail_screen_test.dart`, dopo il test `shows empty state when no spese`:
 
@@ -385,12 +370,12 @@ In `test/trasferta_detail_screen_test.dart`, dopo il test `shows empty state whe
   });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [ ] **Step 6: Run test to verify it fails**
 
 Run: `flutter test test/trasferta_detail_screen_test.dart --plain-name "header shows the original currency"`
-Expected: FAIL — compilazione KO su `totaliEurPerCategoria` (rimosso nel Task 3) oppure, una volta compilato, `€ 17,90` al posto di `¥ 3.000`.
+Expected: FAIL — compilazione KO su `totaliEurPerCategoria` (rimosso allo step 3) oppure, una volta compilato, `€ 17,90` al posto di `¥ 3.000`.
 
-- [ ] **Step 3: Write minimal implementation**
+- [ ] **Step 7: Write minimal implementation**
 
 3a. Nel `body` (riga ~382) sostituisci le due referenze al campo rimosso:
 
@@ -486,30 +471,34 @@ importo di riga (sostituisce `formatEur(e.value)`):
                       formatValuta(e.value, valuta),
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [ ] **Step 8: Run tests to verify they pass**
 
-Run: `flutter test test/trasferta_detail_screen_test.dart`
+Run: `flutter test test/trasferta_detail_screen_test.dart test/trasferta_detail_controller_test.dart`
 Expected: PASS, inclusi i test preesistenti (`shows empty state when no spese` continua a trovare `€ 0,00` perché la trasferta fixture ha `valutaDefault` EUR; `manual expense flow` continua a trovare `Totali per categoria (EUR)` perché la sua unica valuta è EUR).
 
 Poi: `flutter analyze` → zero issue.
 
-- [ ] **Step 5: Commit** *(solo se autorizzato)*
+- [ ] **Step 9: Commit** *(solo se autorizzato)*
 
 ```bash
-git add lib/ui/trasferte/trasferta_detail_screen.dart test/trasferta_detail_screen_test.dart
+git add lib/ui/trasferte/trasferta_detail_controller.dart lib/ui/trasferte/trasferta_detail_screen.dart test/trasferta_detail_controller_test.dart test/trasferta_detail_screen_test.dart
 git commit -m "feat: trip detail leads with original-currency totals"
 ```
 
 ---
 
-### Task 5: Controller lista — totali per valuta e spese non convertite
+### Task 4: Lista — controller e card
+
+Stesso motivo del Task 3: `TrasfertaListItem` guadagna un parametro
+obbligatorio, quindi la card e i suoi test vanno aggiornati nello stesso task.
 
 **Files:**
 - Modify: `lib/ui/trasferte/trasferte_list_controller.dart:8-53`
-- Test: `test/trasferte_list_controller_test.dart`
+- Modify: `lib/ui/shared/widgets/trip_card.dart:95-101`
+- Test: `test/trasferte_list_controller_test.dart`, `test/trip_card_test.dart`
 
 **Interfaces:**
-- Consumes: `SpesaRepository.totaliPerValuta`, `.countSenzaEur`, `.totaleEur`, `.countByTrasferta`.
+- Consumes: `SpesaRepository.totaliPerValuta`, `.countSenzaEur`, `.totaleEur`, `.countByTrasferta`; `formatValuta`, `formatEur` (Task 1).
 - Produces:
   - `TrasfertaListItem({required Trasferta trasferta, required int numSpese, required double totaleEur, required Map<String, double> totaliPerValuta})` — nuovo parametro **obbligatorio** in coda.
   - `int TrasferteListController.countSenzaEurTotale`.
@@ -606,31 +595,13 @@ Corpo di `load()`:
     countSenzaEurTotale = senzaEur;
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [ ] **Step 4: Run controller tests to verify they pass**
 
 Run: `flutter test test/trasferte_list_controller_test.dart`
-Expected: PASS. `flutter analyze` segnalerà `trip_card_test.dart` e `trip_card.dart` (parametro obbligatorio mancante): atteso, lo risolve il Task 6.
+Expected: PASS.
+`flutter analyze` è ancora rosso su `trip_card.dart` e `trip_card_test.dart` (parametro obbligatorio mancante): lo sistemano gli step 5-8. Non committare qui.
 
-- [ ] **Step 5: Commit** *(solo se autorizzato)*
-
-```bash
-git add lib/ui/trasferte/trasferte_list_controller.dart test/trasferte_list_controller_test.dart
-git commit -m "feat: list controller exposes per-currency totals"
-```
-
----
-
-### Task 6: Card della lista in valuta originale
-
-**Files:**
-- Modify: `lib/ui/shared/widgets/trip_card.dart:95-101`
-- Test: `test/trip_card_test.dart`
-
-**Interfaces:**
-- Consumes: `TrasfertaListItem.totaliPerValuta`, `.totaleEur` (Task 5); `formatValuta`, `formatEur` (Task 1).
-- Produces: nessuna API nuova.
-
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 5: Write the failing widget test**
 
 Aggiorna l'helper `item(...)` in cima a `test/trip_card_test.dart` — serve il nuovo parametro obbligatorio — e aggiungi due test:
 
@@ -686,12 +657,12 @@ E in coda al file:
   });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [ ] **Step 6: Run test to verify it fails**
 
 Run: `flutter test test/trip_card_test.dart`
 Expected: FAIL — `€ 345,50` renderizzato al posto di `¥ 45.320`.
 
-- [ ] **Step 3: Write minimal implementation**
+- [ ] **Step 7: Write minimal implementation**
 
 In `trip_card.dart` sostituisci il `Text(formatEur(item.totaleEur), ...)` con:
 
@@ -738,28 +709,30 @@ e aggiungi il metodo alla classe `TripCard`:
   }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [ ] **Step 8: Run tests to verify they pass**
 
-Run: `flutter test test/trip_card_test.dart test/trasferte_list_screen_test.dart`
+Run: `flutter test test/trip_card_test.dart test/trasferte_list_controller_test.dart test/trasferte_list_screen_test.dart`
 Expected: PASS. Se `trasferte_list_screen_test.dart` costruisce `TrasfertaListItem` a mano, aggiungi lì `totaliPerValuta: const {}`.
 
-- [ ] **Step 5: Commit** *(solo se autorizzato)*
+Poi: `flutter analyze` → zero issue.
+
+- [ ] **Step 9: Commit** *(solo se autorizzato)*
 
 ```bash
-git add lib/ui/shared/widgets/trip_card.dart test/trip_card_test.dart
-git commit -m "feat: trip card leads with original-currency totals"
+git add lib/ui/trasferte/trasferte_list_controller.dart lib/ui/shared/widgets/trip_card.dart test/trasferte_list_controller_test.dart test/trip_card_test.dart
+git commit -m "feat: trip list leads with original-currency totals"
 ```
 
 ---
 
-### Task 7: Nota sulle spese non convertite nel totale complessivo
+### Task 5: Nota sulle spese non convertite nel totale complessivo
 
 **Files:**
 - Modify: `lib/ui/trasferte/trasferte_list_screen.dart:128`, `:149-178` (`_TotalHeader`)
 - Test: `test/trasferte_list_screen_test.dart`
 
 **Interfaces:**
-- Consumes: `TrasferteListController.totaleComplessivoEur`, `.countSenzaEurTotale` (Task 5).
+- Consumes: `TrasferteListController.totaleComplessivoEur`, `.countSenzaEurTotale` (Task 4).
 - Produces: nessuna API nuova. `_TotalHeader` passa da `({required double totale})` a `({required double totale, required int senzaEur})`.
 
 - [ ] **Step 1: Write the failing test**
@@ -872,7 +845,7 @@ git commit -m "feat: overall total states how many spese it excludes"
 
 ---
 
-### Task 8: Verifica finale, versione, ToDo
+### Task 6: Verifica finale, versione, ToDo
 
 **Files:**
 - Modify: `lib/version.dart:3`, `pubspec.yaml:20`, `ToDo.md` (sezione "Bug rilevati" della fase 6b)
@@ -933,4 +906,4 @@ git commit -m "chore: bump to 0.8.0, original-currency totals"
 - [ ] `flutter test` → verde
 - [ ] Build su emulatore: **SKIP esplicito** — ambiente Android incompleto su questa macchina (JDK 11, piattaforme SDK assenti). La verifica reale avviene sull'APK della GitHub Action.
 - [ ] Verifica manuale sul dispositivo: aprire una trasferta con spese in valuta estera non convertite e controllare che il totale mostri la valuta originale e non `€ 0,00`.
-- [ ] `ToDo.md` aggiornato (Task 8)
+- [ ] `ToDo.md` aggiornato (Task 6)

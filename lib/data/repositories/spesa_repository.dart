@@ -108,11 +108,7 @@ class SpesaRepository {
         'WHERE trasferta_id = ? AND importo_eur IS NOT NULL '
         'GROUP BY categoria',
         [trasfertaId]);
-    return {
-      for (final row in rows)
-        Categoria.values.byName(row['categoria'] as String):
-            (row['totale'] as num).toDouble(),
-    };
+    return _perCategoria(rows);
   }
 
   /// Sum of `importo` (original currency) grouped by categoria. Meaningful
@@ -124,10 +120,13 @@ class SpesaRepository {
         'SELECT categoria, SUM(importo) AS totale FROM spese '
         'WHERE trasferta_id = ? GROUP BY categoria',
         [trasfertaId]);
-    return {
-      for (final row in rows)
-        Categoria.values.byName(row['categoria'] as String):
-            (row['totale'] as num).toDouble(),
-    };
+    return _perCategoria(rows);
   }
+
+  /// Rows of `categoria` + `totale` into a per-category map.
+  Map<Categoria, double> _perCategoria(List<Map<String, Object?>> rows) => {
+    for (final row in rows)
+      Categoria.values.byName(row['categoria'] as String):
+          (row['totale'] as num).toDouble(),
+  };
 }
