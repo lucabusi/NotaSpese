@@ -114,4 +114,20 @@ class SpesaRepository {
             (row['totale'] as num).toDouble(),
     };
   }
+
+  /// Sum of `importo` (original currency) grouped by categoria. Meaningful
+  /// only when the trasferta has a single valuta — callers check
+  /// [totaliPerValuta] first and fall back to [totaliEurPerCategoria].
+  Future<Map<Categoria, double>> totaliPerCategoria(int trasfertaId) async {
+    final db = await _dbHelper.database;
+    final rows = await db.rawQuery(
+        'SELECT categoria, SUM(importo) AS totale FROM spese '
+        'WHERE trasferta_id = ? GROUP BY categoria',
+        [trasfertaId]);
+    return {
+      for (final row in rows)
+        Categoria.values.byName(row['categoria'] as String):
+            (row['totale'] as num).toDouble(),
+    };
+  }
 }

@@ -248,6 +248,21 @@ void main() {
 
       expect(totali, {Categoria.cena: 40.0, Categoria.taxi: 12.0});
     });
+
+    test('totaliPerCategoria sums importo in original currency, no EUR filter',
+        () async {
+      await repo.insert(spesa(categoria: Categoria.cena, importo: 3000, valuta: 'JPY'));
+      await repo.insert(spesa(categoria: Categoria.cena, importo: 1500, valuta: 'JPY'));
+      await repo.insert(spesa(categoria: Categoria.taxi, importo: 800, valuta: 'JPY'));
+
+      final totali = await repo.totaliPerCategoria(trasfertaId);
+
+      expect(totali, {Categoria.cena: 4500.0, Categoria.taxi: 800.0});
+    });
+
+    test('totaliPerCategoria is empty for a trasferta without spese', () async {
+      expect(await repo.totaliPerCategoria(trasfertaId), isEmpty);
+    });
   });
 
   group('TrasfertaRepository', () {
