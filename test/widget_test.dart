@@ -12,6 +12,7 @@ import 'package:nota_spese/services/ocr/claude_ocr_service.dart';
 import 'package:nota_spese/services/ocr/mlkit_ocr_service.dart';
 import 'package:nota_spese/services/ocr/receipt_parser.dart';
 import 'package:nota_spese/services/ocr/recognition_orchestrator.dart';
+import 'package:nota_spese/services/photo/crop_service.dart';
 import 'package:nota_spese/services/photo/photo_service.dart';
 import 'package:nota_spese/services/photo/receipt_capture_service.dart';
 import 'package:nota_spese/services/settings/api_key_store.dart';
@@ -65,6 +66,8 @@ void main() {
       settingsService: SettingsService(),
       apiKeyStore: _FakeApiKeyStore(),
       exchangeService: FakeExchangeService(),
+      cropService: CropService(
+          tempDirProvider: () async => Directory.systemTemp.path),
     ));
     await tester.pumpAndSettle();
 

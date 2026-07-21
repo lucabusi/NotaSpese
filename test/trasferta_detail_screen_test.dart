@@ -16,6 +16,7 @@ import 'package:nota_spese/services/ocr/mlkit_ocr_service.dart';
 import 'package:nota_spese/services/ocr/parsed_receipt.dart';
 import 'package:nota_spese/services/ocr/receipt_parser.dart';
 import 'package:nota_spese/services/ocr/recognition_orchestrator.dart';
+import 'package:nota_spese/services/photo/crop_service.dart';
 import 'package:nota_spese/services/photo/photo_service.dart';
 import 'package:nota_spese/services/photo/receipt_capture_service.dart';
 import 'package:nota_spese/services/settings/settings_service.dart';
@@ -55,6 +56,12 @@ class _FakeOrchestrator extends RecognitionOrchestrator {
   final List<OcrEngine> calls = [];
   final List<String?> linguaHints = [];
 
+  /// Which path each `recognize` call actually received: the seam finding
+  /// 5 covers — nothing previously asserted on this, so a build that fed
+  /// the raw capture straight to OCR (ignoring the crop) would have passed
+  /// the whole suite.
+  final List<String> imagePaths = [];
+
   @override
   Future<bool> get claudeAvailable async => claudeAvailableValue;
 
@@ -65,6 +72,7 @@ class _FakeOrchestrator extends RecognitionOrchestrator {
     String? linguaHint,
   }) {
     calls.add(engine);
+    imagePaths.add(imagePath);
     linguaHints.add(linguaHint);
     return recognizeImpl?.call(imagePath, engine) ??
         Future.value(RecognitionResult(
@@ -79,6 +87,19 @@ class _FakeOrchestrator extends RecognitionOrchestrator {
   }
 }
 
+/// Fake crop: always returns [output] regardless of the rect, so a test
+/// can prove OCR and the saved photo derive from what CropService
+/// produced, not from the raw capture.
+class _FakeCropService extends CropService {
+  _FakeCropService(this.output)
+      : super(tempDirProvider: () async => Directory.systemTemp.path);
+
+  final String output;
+
+  @override
+  Future<String> crop(String sourcePath, CropRect rect) async => output;
+}
+
 void main() {
   setUpAll(sqfliteFfiInit);
 
@@ -88,6 +109,7 @@ void main() {
   late FotoRepository fotoRepo;
   late PhotoService photoService;
   late Directory baseDir;
+  late Directory cropDir;
   late String sourceJpg;
   late int trasfertaId;
 
@@ -96,6 +118,7 @@ void main() {
     // Real IO must happen here: setUp runs outside FakeAsync (see gotcha
     // in spesa_form_screen_test.dart).
     baseDir = await Directory.systemTemp.createTemp('detail_screen');
+    cropDir = await Directory.systemTemp.createTemp('detail_screen_crop');
     final im = img.Image(width: 320, height: 240);
     img.fill(im, color: img.ColorRgb8(120, 40, 200));
     sourceJpg = p.join(baseDir.path, 'src.jpg');
@@ -125,10 +148,17 @@ void main() {
     } on FileSystemException {
       // Windows: Image.file may still hold a handle on a temp jpg.
     }
+    try {
+      await cropDir.delete(recursive: true);
+    } on FileSystemException {
+      // Windows: Image.file may still hold a handle on a temp jpg.
+    }
   });
 
   Future<void> pump(WidgetTester tester,
-      {_FakeOrchestrator? orchestrator, int? id}) async {
+      {_FakeOrchestrator? orchestrator,
+      int? id,
+      CropService? cropService}) async {
     await tester.pumpWidget(MaterialApp(
       home: TrasfertaDetailScreen(
         controller: TrasfertaDetailController(
@@ -137,6 +167,8 @@ void main() {
         orchestrator: orchestrator ?? _FakeOrchestrator(),
         settingsService: SettingsService(),
         exchangeService: FakeExchangeService(),
+        cropService: cropService ??
+            CropService(tempDirProvider: () async => cropDir.path),
       ),
     ));
     await tester.pumpAndSettle();
@@ -153,6 +185,21 @@ void main() {
       await tester.pump();
     }
     await tester.pumpAndSettle();
+  }
+
+  // Pumps one frame at a time until [finder] matches, then stops — instead
+  // of a fixed pump count, which would either undershoot (miss the crop
+  // confirm's own blocking-progress dialog, interposed since the crop
+  // temp-file fix) or overshoot past a transient state, e.g. the OCR
+  // progress dialog when the (fake) orchestrator resolves immediately.
+  // pumpAndSettle can't be used here: a still-pending future behind a
+  // CircularProgressIndicator reschedules frames forever.
+  Future<void> pumpUntilVisible(WidgetTester tester, Finder finder,
+      {int maxPumps = 20}) async {
+    for (var i = 0; i < maxPumps; i++) {
+      if (finder.evaluate().isNotEmpty) return;
+      await tester.pump();
+    }
   }
 
   Future<void> scrollTo(WidgetTester tester, Finder finder) async {
@@ -500,6 +547,114 @@ void main() {
     expect(find.text('Nuova spesa'), findsOneWidget);
   });
 
+  testWidgets(
+      'scatta: the OCR call and the saved photo both derive from the '
+      "cropped path, not the raw capture", (tester) async {
+    // Sentinel: a distinct solid color, different from sourceJpg's, so the
+    // saved photo's own pixels can be traced back to it specifically —
+    // this is the one test that checks what the user actually gets
+    // (OCR'd and saved receipt) rather than which code path ran. Real IO,
+    // so it must run inside runAsync: a bare await in a testWidgets body
+    // never completes under FakeAsync.
+    final sentinelPath = p.join(cropDir.path, 'sentinel.jpg');
+    await tester.runAsync(() async {
+      final sentinel = img.Image(width: 20, height: 20);
+      img.fill(sentinel, color: img.ColorRgb8(10, 200, 10));
+      await File(sentinelPath).writeAsBytes(img.encodeJpg(sentinel));
+    });
+
+    final orchestrator = _FakeOrchestrator();
+    await pump(tester,
+        orchestrator: orchestrator,
+        cropService: _FakeCropService(sentinelPath));
+
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('sheet-scatta')));
+    await settleWithRealIo(tester);
+    await tester.tap(find.byKey(const Key('crop-conferma')));
+    await settleWithRealIo(tester);
+
+    expect(orchestrator.imagePaths, [sentinelPath],
+        reason: 'OCR must never see the raw capture once a crop happened');
+
+    await tester.tap(find.byKey(const Key('key-5')));
+    await scrollTo(tester, find.byKey(const Key('salva-spesa')));
+    await tester.tap(find.byKey(const Key('salva-spesa')));
+    await settleWithRealIo(tester);
+
+    final spesa = (await spesaRepo.getByTrasferta(trasfertaId)).single;
+    final foto = await fotoRepo.getBySpesa(spesa.id!);
+    final saved = img.decodeImage(
+        File(p.join(baseDir.path, foto!.filePath)).readAsBytesSync())!;
+    final pixel = saved.getPixel(0, 0);
+    expect(pixel.r, closeTo(10, 8));
+    expect(pixel.g, closeTo(200, 8));
+    expect(pixel.b, closeTo(10, 8));
+  });
+
+  testWidgets(
+      'scatta: cropping and saving deletes the temporary CROP_ file '
+      'afterwards', (tester) async {
+    final orchestrator = _FakeOrchestrator();
+    await pump(tester, orchestrator: orchestrator);
+
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('sheet-scatta')));
+    await settleWithRealIo(tester);
+
+    // Actually crop something, so CropService writes a real CROP_ file
+    // that differs from the capture's own path.
+    await tester.drag(
+        find.byKey(const Key('crop-handle-tl')), const Offset(40, 40));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('crop-conferma')));
+    await settleWithRealIo(tester);
+
+    List<File> cropFiles() => cropDir
+        .listSync()
+        .whereType<File>()
+        .where((f) => p.basename(f.path).startsWith('CROP_'))
+        .toList();
+    expect(cropFiles(), hasLength(1),
+        reason: 'the drag must have produced a real crop file');
+
+    await tester.tap(find.byKey(const Key('key-5')));
+    await scrollTo(tester, find.byKey(const Key('salva-spesa')));
+    await tester.tap(find.byKey(const Key('salva-spesa')));
+    await settleWithRealIo(tester);
+
+    expect(cropFiles(), isEmpty,
+        reason: 'the crop temp file must be cleaned up once the flow ends');
+  });
+
+  testWidgets(
+      'scatta: confirming without cropping never deletes the capture '
+      'itself', (tester) async {
+    final orchestrator = _FakeOrchestrator();
+    await pump(tester, orchestrator: orchestrator);
+
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('sheet-scatta')));
+    await settleWithRealIo(tester);
+
+    // No drag: CropService.crop short-circuits and returns sourceJpg
+    // unchanged, so it must never be the thing that gets deleted.
+    await tester.tap(find.byKey(const Key('crop-conferma')));
+    await settleWithRealIo(tester);
+
+    await tester.tap(find.byKey(const Key('key-5')));
+    await scrollTo(tester, find.byKey(const Key('salva-spesa')));
+    await tester.tap(find.byKey(const Key('salva-spesa')));
+    await settleWithRealIo(tester);
+
+    expect(File(sourceJpg).existsSync(), isTrue,
+        reason: 'crop() returned the source unchanged; deleting it would '
+            'destroy the capture, not a temp file');
+  });
+
   testWidgets('scatta: annullare il crop non lancia l\'OCR', (tester) async {
     final orchestrator = _FakeOrchestrator();
     await pump(tester, orchestrator: orchestrator);
@@ -553,7 +708,7 @@ void main() {
     await tester.tap(find.byKey(const Key('sheet-scatta')));
     await settleWithRealIo(tester);
     await tester.tap(find.byKey(const Key('crop-conferma')));
-    await tester.pump();
+    await pumpUntilVisible(tester, find.text('Riconoscimento in corso…'));
     expect(find.text('Riconoscimento in corso…'), findsOneWidget);
 
     await tester.pumpAndSettle();
@@ -623,7 +778,7 @@ void main() {
     await tester.tap(find.byKey(const Key('sheet-scatta')));
     await settleWithRealIo(tester);
     await tester.tap(find.byKey(const Key('crop-conferma')));
-    await tester.pump();
+    await pumpUntilVisible(tester, find.text('Riconoscimento in corso…'));
     expect(find.text('Riconoscimento in corso…'), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('ocr-annulla')));

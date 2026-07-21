@@ -12,6 +12,7 @@ import 'services/ocr/claude_ocr_service.dart';
 import 'services/ocr/mlkit_ocr_service.dart';
 import 'services/ocr/receipt_parser.dart';
 import 'services/ocr/recognition_orchestrator.dart';
+import 'services/photo/crop_service.dart';
 import 'services/photo/photo_service.dart';
 import 'services/photo/receipt_capture_service.dart';
 import 'services/settings/api_key_store.dart';
@@ -42,6 +43,8 @@ void main() {
   final photoService =
       PhotoService(settingsService, basePathProvider: photoBasePath);
   final captureService = ReceiptCaptureService();
+  final cropService = CropService(
+      tempDirProvider: () async => (await getTemporaryDirectory()).path);
 
   final apiKeyStore = ApiKeyStore();
   final exchangeService = ExchangeService(settingsService);
@@ -62,5 +65,6 @@ void main() {
     settingsService: settingsService,
     apiKeyStore: apiKeyStore,
     exchangeService: exchangeService,
+    cropService: cropService,
   ));
 }

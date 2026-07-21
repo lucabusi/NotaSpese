@@ -7,6 +7,7 @@ import '../../data/repositories/trasferta_repository.dart';
 import '../../services/currency/exchange_service.dart';
 import '../../services/ocr/parsed_receipt.dart';
 import '../../services/ocr/recognition_orchestrator.dart';
+import '../../services/photo/crop_service.dart';
 import '../../services/photo/photo_service.dart';
 import '../../services/photo/receipt_capture_service.dart';
 import '../../services/settings/api_key_store.dart';
@@ -30,6 +31,7 @@ class HomeShell extends StatefulWidget {
     required this.settingsService,
     required this.apiKeyStore,
     required this.exchangeService,
+    required this.cropService,
   });
 
   final TrasfertaRepository trasfertaRepository;
@@ -41,6 +43,7 @@ class HomeShell extends StatefulWidget {
   final SettingsService settingsService;
   final ApiKeyStore apiKeyStore;
   final ExchangeService exchangeService;
+  final CropService cropService;
 
   @override
   State<HomeShell> createState() => _HomeShellState();
@@ -84,6 +87,7 @@ class _HomeShellState extends State<HomeShell> {
             orchestrator: widget.orchestrator,
             settingsService: widget.settingsService,
             exchangeService: widget.exchangeService,
+            cropService: widget.cropService,
           ),
           TrasferteListScreen(
             controller: _archivioController,
@@ -95,6 +99,7 @@ class _HomeShellState extends State<HomeShell> {
             orchestrator: widget.orchestrator,
             settingsService: widget.settingsService,
             exchangeService: widget.exchangeService,
+            cropService: widget.cropService,
           ),
           ImpostazioniMinimal(
             apiKeyStore: widget.apiKeyStore,

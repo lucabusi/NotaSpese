@@ -40,7 +40,7 @@ class TrasfertaDetailScreen extends StatefulWidget {
     required this.orchestrator,
     required this.settingsService,
     required this.exchangeService,
-    this.cropService,
+    required this.cropService,
   });
 
   final TrasfertaDetailController controller;
@@ -48,7 +48,7 @@ class TrasfertaDetailScreen extends StatefulWidget {
   final RecognitionOrchestrator orchestrator;
   final SettingsService settingsService;
   final ExchangeService exchangeService;
-  final CropService? cropService;
+  final CropService cropService;
 
   @override
   State<TrasfertaDetailScreen> createState() => _TrasfertaDetailScreenState();
@@ -57,7 +57,7 @@ class TrasfertaDetailScreen extends StatefulWidget {
 class _TrasfertaDetailScreenState extends State<TrasfertaDetailScreen> {
   TrasfertaDetailController get controller => widget.controller;
 
-  late final CropService _cropService = widget.cropService ?? CropService();
+  CropService get _cropService => widget.cropService;
 
   // Cached (not re-fetched per build, gotcha: a fresh Future in build would
   // rebuild forever) sheet defaults; loaded once, best-effort.
@@ -243,6 +243,22 @@ class _TrasfertaDetailScreenState extends State<TrasfertaDetailScreen> {
       onRetryOtherEngine:
           _makeRetryCallback(ritagliata, result.receipt.engine, t),
     );
+    await _deleteCropTempFile(ritagliata, path);
+  }
+
+  /// Cleans up the temporary CROP_ file once the form using it has closed.
+  /// Only when [ritagliata] differs from [capturedPath]: when the user
+  /// cropped nothing, [CropService.crop] returns the capture's own path
+  /// unchanged, and deleting that would destroy the capture instead of a
+  /// temp file. Best-effort: a failed cleanup must never crash the flow.
+  Future<void> _deleteCropTempFile(
+      String ritagliata, String capturedPath) async {
+    if (ritagliata == capturedPath) return;
+    try {
+      await File(ritagliata).delete();
+    } catch (_) {
+      // Non-blocking: worst case a temp file survives to the next OS clean.
+    }
   }
 
   /// "Riprova con altro motore" (banner OCR nel form): alterna l'ultimo
