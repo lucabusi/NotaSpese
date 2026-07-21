@@ -22,4 +22,20 @@ void main() {
     expect(formatDateRange(DateTime(2026, 7, 10), null),
         '10/07/2026 – in corso');
   });
+
+  group('formatValuta', () {
+    test('uses the currency symbol and its decimal digits', () {
+      expect(formatValuta(45320, 'JPY'), '¥ 45.320'); // 0 decimali
+      expect(formatValuta(12.5, 'EUR'), '€ 12,50');
+      expect(formatValuta(1.5, 'KWD'), 'د.ك 1,500'); // 3 decimali
+    });
+
+    test('unknown ISO code falls back to the code itself, 2 decimals', () {
+      expect(formatValuta(10, 'XXX'), 'XXX 10,00');
+    });
+
+    test('formatEur stays the EUR case of formatValuta', () {
+      expect(formatEur(345.5), '€ 345,50');
+    });
+  });
 }
