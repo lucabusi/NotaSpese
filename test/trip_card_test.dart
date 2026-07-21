@@ -5,7 +5,12 @@ import 'package:nota_spese/ui/shared/widgets/trip_card.dart';
 import 'package:nota_spese/ui/trasferte/trasferte_list_controller.dart';
 
 void main() {
-  TrasfertaListItem item({bool archiviata = false}) => TrasfertaListItem(
+  TrasfertaListItem item({
+    bool archiviata = false,
+    Map<String, double> totaliPerValuta = const {'JPY': 45320.0},
+    double totaleEur = 345.5,
+  }) =>
+      TrasfertaListItem(
         trasferta: Trasferta(
           id: 1,
           nome: 'Tokyo Q3',
@@ -17,7 +22,8 @@ void main() {
           createdAt: DateTime(2026, 7, 9),
         ),
         numSpese: 12,
-        totaleEur: 345.5,
+        totaleEur: totaleEur,
+        totaliPerValuta: totaliPerValuta,
       );
 
   Future<void> pump(WidgetTester tester, Widget child) =>
@@ -30,7 +36,8 @@ void main() {
     expect(find.textContaining('Tokyo ·'), findsOneWidget);
     expect(find.text('JPY'), findsOneWidget);
     expect(find.text('12 spese'), findsOneWidget);
-    expect(find.text('€ 345,50'), findsOneWidget);
+    expect(find.text('¥ 45.320'), findsOneWidget);
+    expect(find.text('≈ € 345,50'), findsOneWidget);
     expect(find.text('ARCHIVIATA'), findsNothing);
   });
 
@@ -65,5 +72,23 @@ void main() {
     await pump(tester, TripCard(item: item(), onTap: () => tapped = true));
     await tester.tap(find.text('Tokyo Q3'));
     expect(tapped, isTrue);
+  });
+
+  testWidgets('without conversion the card shows no euro line', (tester) async {
+    await pump(tester, TripCard(item: item(totaleEur: 0)));
+
+    expect(find.text('¥ 45.320'), findsOneWidget);
+    expect(find.textContaining('€'), findsNothing);
+  });
+
+  testWidgets('EUR-only trip shows no redundant euro hint', (tester) async {
+    await pump(
+        tester,
+        TripCard(
+            item: item(
+                totaliPerValuta: const {'EUR': 40.0}, totaleEur: 40)));
+
+    expect(find.text('€ 40,00'), findsOneWidget);
+    expect(find.textContaining('≈'), findsNothing);
   });
 }

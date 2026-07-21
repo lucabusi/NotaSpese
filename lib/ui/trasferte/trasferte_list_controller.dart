@@ -10,11 +10,15 @@ class TrasfertaListItem {
     required this.trasferta,
     required this.numSpese,
     required this.totaleEur,
+    required this.totaliPerValuta,
   });
 
   final Trasferta trasferta;
   final int numSpese;
   final double totaleEur;
+
+  /// Sums in the currencies actually used by this trip's spese.
+  final Map<String, double> totaliPerValuta;
 }
 
 /// Backs both the "Trasferte attive" and "Archivio" tabs (flag [archiviate]).
@@ -30,6 +34,7 @@ class TrasferteListController extends ChangeNotifier {
   bool loading = false;
   List<TrasfertaListItem> items = [];
   double totaleComplessivoEur = 0;
+  int countSenzaEurTotale = 0;
 
   Future<void> load() async {
     loading = true;
@@ -39,15 +44,23 @@ class TrasferteListController extends ChangeNotifier {
         : await _trasfertaRepository.getAttive();
     final list = <TrasfertaListItem>[];
     var totale = 0.0;
+    var senzaEur = 0;
     for (final t in trasferte) {
       final numSpese = await _spesaRepository.countByTrasferta(t.id!);
       final totaleEur = await _spesaRepository.totaleEur(t.id!);
+      final totaliPerValuta = await _spesaRepository.totaliPerValuta(t.id!);
       list.add(TrasfertaListItem(
-          trasferta: t, numSpese: numSpese, totaleEur: totaleEur));
+        trasferta: t,
+        numSpese: numSpese,
+        totaleEur: totaleEur,
+        totaliPerValuta: totaliPerValuta,
+      ));
       totale += totaleEur;
+      senzaEur += await _spesaRepository.countSenzaEur(t.id!);
     }
     items = list;
     totaleComplessivoEur = totale;
+    countSenzaEurTotale = senzaEur;
     loading = false;
     notifyListeners();
   }

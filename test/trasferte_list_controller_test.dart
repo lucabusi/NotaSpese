@@ -102,4 +102,33 @@ void main() {
     await controller.load();
     expect(notified, greaterThanOrEqualTo(1));
   });
+
+  test('items carry per-currency totals and unconverted spese are counted',
+      () async {
+    final id = await trasfertaRepo.insert(trasferta(nome: 'Tokyo'));
+    await spesaRepo.insert(Spesa(
+      trasfertaId: id,
+      data: DateTime(2026, 7, 16),
+      categoria: Categoria.cena,
+      importo: 3000,
+      valuta: 'JPY',
+      createdAt: DateTime(2026, 7, 16, 20),
+    ));
+    await spesaRepo.insert(Spesa(
+      trasfertaId: id,
+      data: DateTime(2026, 7, 16),
+      categoria: Categoria.taxi,
+      importo: 20,
+      valuta: 'EUR',
+      importoEur: 20,
+      createdAt: DateTime(2026, 7, 16, 21),
+    ));
+
+    await controller.load();
+
+    expect(controller.items.single.totaliPerValuta,
+        {'JPY': 3000.0, 'EUR': 20.0});
+    expect(controller.totaleComplessivoEur, 20);
+    expect(controller.countSenzaEurTotale, 1);
+  });
 }

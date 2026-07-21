@@ -92,12 +92,28 @@ class TripCard extends StatelessWidget {
                   ],
                 ),
               ),
-              Text(
-                formatEur(item.totaleEur),
-                style: textTheme.titleMedium?.copyWith(
-                  fontFeatures: amountFontFeatures,
-                  fontWeight: FontWeight.w700,
-                ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  for (final e in _righeValuta())
+                    Text(
+                      formatValuta(e.value, e.key),
+                      style: textTheme.titleMedium?.copyWith(
+                        fontFeatures: amountFontFeatures,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  // Same rule as the detail header: the EUR hint disappears
+                  // when nothing is converted or when EUR is already shown.
+                  if (item.totaleEur > 0 &&
+                      !(item.totaliPerValuta.length == 1 &&
+                          item.totaliPerValuta.containsKey('EUR')))
+                    Text(
+                      '≈ ${formatEur(item.totaleEur)}',
+                      style: textTheme.bodySmall
+                          ?.copyWith(color: AppColors.textSecondary),
+                    ),
+                ],
               ),
               PopupMenuButton<TripCardAction>(
                 onSelected: _onAction,
@@ -119,6 +135,19 @@ class TripCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// Trip currency first, then the others by descending amount; a zero row
+  /// in the trip currency when there are no spese yet.
+  List<MapEntry<String, double>> _righeValuta() {
+    final valutaTrasferta = item.trasferta.valutaDefault;
+    if (item.totaliPerValuta.isEmpty) return [MapEntry(valutaTrasferta, 0)];
+    return item.totaliPerValuta.entries.toList()
+      ..sort((a, b) {
+        if (a.key == valutaTrasferta) return -1;
+        if (b.key == valutaTrasferta) return 1;
+        return b.value.compareTo(a.value);
+      });
   }
 }
 
