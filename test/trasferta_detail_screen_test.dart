@@ -429,10 +429,14 @@ void main() {
       'delete spesa removes files', (tester) async {
     await pump(tester);
 
-    // 📷 Scatta: fake scanner ritorna il jpg preparato → form con preview.
+    // 📷 Scatta: fake scanner ritorna il jpg preparato → crop → form con
+    // preview.
     await tester.tap(find.byType(FloatingActionButton));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('sheet-scatta')));
+    await settleWithRealIo(tester);
+    expect(find.byKey(const Key('crop-conferma')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('crop-conferma')));
     await tester.pumpAndSettle();
     expect(find.text('Nuova spesa'), findsOneWidget);
 
@@ -475,6 +479,43 @@ void main() {
     expect(file.existsSync(), isFalse);
   });
 
+  testWidgets('scatta: il crop precede l\'OCR e ne riceve il ritaglio',
+      (tester) async {
+    final orchestrator = _FakeOrchestrator();
+    await pump(tester, orchestrator: orchestrator);
+
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('sheet-scatta')));
+    await settleWithRealIo(tester);
+
+    // Crop screen instead of going straight to the OCR.
+    expect(find.byKey(const Key('crop-conferma')), findsOneWidget);
+    expect(orchestrator.calls, isEmpty);
+
+    await tester.tap(find.byKey(const Key('crop-conferma')));
+    await tester.pumpAndSettle();
+
+    expect(orchestrator.calls, hasLength(1));
+    expect(find.text('Nuova spesa'), findsOneWidget);
+  });
+
+  testWidgets('scatta: annullare il crop non lancia l\'OCR', (tester) async {
+    final orchestrator = _FakeOrchestrator();
+    await pump(tester, orchestrator: orchestrator);
+
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('sheet-scatta')));
+    await settleWithRealIo(tester);
+    await tester.tap(find.byKey(const Key('crop-annulla')));
+    await tester.pumpAndSettle();
+
+    expect(orchestrator.calls, isEmpty);
+    expect(find.text('Nuova spesa'), findsNothing);
+    expect(find.text('Tokyo'), findsOneWidget); // back on the detail screen
+  });
+
   testWidgets('elimina asks confirmation and cancel keeps the trip',
       (tester) async {
     await pump(tester);
@@ -510,6 +551,8 @@ void main() {
     await tester.tap(find.byType(FloatingActionButton));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('sheet-scatta')));
+    await settleWithRealIo(tester);
+    await tester.tap(find.byKey(const Key('crop-conferma')));
     await tester.pump();
     expect(find.text('Riconoscimento in corso…'), findsOneWidget);
 
@@ -539,6 +582,8 @@ void main() {
     await tester.tap(find.byType(FloatingActionButton));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('sheet-scatta')));
+    await settleWithRealIo(tester);
+    await tester.tap(find.byKey(const Key('crop-conferma')));
     await tester.pumpAndSettle();
 
     expect(orchestrator.linguaHints, ['sr']);
@@ -559,6 +604,8 @@ void main() {
     await tester.tap(find.byType(FloatingActionButton));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('sheet-scatta')));
+    await settleWithRealIo(tester);
+    await tester.tap(find.byKey(const Key('crop-conferma')));
     await tester.pumpAndSettle();
 
     expect(orchestrator.linguaHints, ['ja']);
@@ -574,6 +621,8 @@ void main() {
     await tester.tap(find.byType(FloatingActionButton));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('sheet-scatta')));
+    await settleWithRealIo(tester);
+    await tester.tap(find.byKey(const Key('crop-conferma')));
     await tester.pump();
     expect(find.text('Riconoscimento in corso…'), findsOneWidget);
 
@@ -596,6 +645,8 @@ void main() {
     await tester.tap(find.byType(FloatingActionButton));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('sheet-scatta')));
+    await settleWithRealIo(tester);
+    await tester.tap(find.byKey(const Key('crop-conferma')));
     await tester.pumpAndSettle();
 
     expect(
@@ -621,6 +672,8 @@ void main() {
     await tester.tap(find.byType(FloatingActionButton));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('sheet-scatta')));
+    await settleWithRealIo(tester);
+    await tester.tap(find.byKey(const Key('crop-conferma')));
     await tester.pumpAndSettle();
 
     expect(find.textContaining('cirillico'), findsOneWidget);
@@ -646,6 +699,8 @@ void main() {
     await tester.tap(find.byType(FloatingActionButton));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('sheet-scatta')));
+    await settleWithRealIo(tester);
+    await tester.tap(find.byKey(const Key('crop-conferma')));
     await tester.pumpAndSettle();
 
     expect(find.textContaining('cirillico'), findsOneWidget);

@@ -12,8 +12,10 @@ import '../../services/currency/exchange_service.dart';
 import '../../services/ocr/lingua_hint.dart';
 import '../../services/ocr/parsed_receipt.dart';
 import '../../services/ocr/recognition_orchestrator.dart';
+import '../../services/photo/crop_service.dart';
 import '../../services/photo/receipt_capture_service.dart';
 import '../../services/settings/settings_service.dart';
+import '../foto/crop_screen.dart';
 import '../shared/currency_rows.dart';
 import '../spese/ocr_progress.dart';
 import '../spese/spesa_form_screen.dart';
@@ -38,6 +40,7 @@ class TrasfertaDetailScreen extends StatefulWidget {
     required this.orchestrator,
     required this.settingsService,
     required this.exchangeService,
+    this.cropService,
   });
 
   final TrasfertaDetailController controller;
@@ -45,6 +48,7 @@ class TrasfertaDetailScreen extends StatefulWidget {
   final RecognitionOrchestrator orchestrator;
   final SettingsService settingsService;
   final ExchangeService exchangeService;
+  final CropService? cropService;
 
   @override
   State<TrasfertaDetailScreen> createState() => _TrasfertaDetailScreenState();
@@ -52,6 +56,8 @@ class TrasfertaDetailScreen extends StatefulWidget {
 
 class _TrasfertaDetailScreenState extends State<TrasfertaDetailScreen> {
   TrasfertaDetailController get controller => widget.controller;
+
+  late final CropService _cropService = widget.cropService ?? CropService();
 
   // Cached (not re-fetched per build, gotcha: a fresh Future in build would
   // rebuild forever) sheet defaults; loaded once, best-effort.
@@ -215,10 +221,15 @@ class _TrasfertaDetailScreenState extends State<TrasfertaDetailScreen> {
   Future<void> _scattaEOcr(OcrEngine engine) async {
     final path = await _captureScatta();
     if (path == null || !mounted) return;
+    // Crop before anything else: the recognized text and the saved photo
+    // must describe the same framing.
+    final ritagliata = await CropScreen.show(context,
+        imagePath: path, cropService: _cropService);
+    if (ritagliata == null || !mounted) return;
     final t = controller.trasferta;
     final result = await showOcrProgress(
       context,
-      widget.orchestrator.recognize(path,
+      widget.orchestrator.recognize(ritagliata,
           engine: engine,
           linguaHint:
               effectiveLinguaHint(t?.linguaDefault, t?.valutaDefault)),
@@ -227,9 +238,10 @@ class _TrasfertaDetailScreenState extends State<TrasfertaDetailScreen> {
     _showFallbackSnackbarIfNeeded(result);
     _showCyrillicSnackbarIfNeeded(result, t);
     await _openSpesaForm(
-      pendingFoto: path,
+      pendingFoto: ritagliata,
       parsed: result.receipt,
-      onRetryOtherEngine: _makeRetryCallback(path, result.receipt.engine, t),
+      onRetryOtherEngine:
+          _makeRetryCallback(ritagliata, result.receipt.engine, t),
     );
   }
 
