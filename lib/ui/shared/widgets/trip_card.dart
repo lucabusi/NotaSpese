@@ -105,11 +105,11 @@ class TripCard extends StatelessWidget {
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                  // Same rule as the detail header: the EUR hint disappears
-                  // when nothing is converted or when EUR is already shown.
-                  if (item.totaleEur > 0 &&
-                      !(item.totaliPerValuta.length == 1 &&
-                          item.totaliPerValuta.containsKey('EUR')))
+                  // Same rule as the detail header (shared in
+                  // currency_rows.dart): the EUR hint disappears when
+                  // nothing is converted or when EUR is already shown.
+                  if (mostraSuggerimentoEur(
+                      item.totaleEur, item.totaliPerValuta))
                     Text(
                       '≈ ${formatEur(item.totaleEur)}',
                       style: textTheme.bodySmall
