@@ -190,9 +190,10 @@ void main() {
 
     await pump(tester);
 
-    // Amount appears twice: trip total in the header + the (only) category
-    // bar, both 3000.
-    expect(find.text('¥ 3.000'), findsNWidgets(2));
+    // Amount appears three times: trip total in the header, the (only)
+    // category bar, and the spesa tile — all 3000, all now rendered with
+    // formatValuta so the decimal count matches JPY (0 decimals) too.
+    expect(find.text('¥ 3.000'), findsNWidgets(3));
     expect(find.text('≈ € 17,90'), findsOneWidget);
     expect(find.text('Totali per categoria (JPY)'), findsOneWidget);
   });
@@ -210,12 +211,64 @@ void main() {
 
     await pump(tester);
 
-    // Amount appears twice: trip total in the header + the (only) category
-    // bar, both 3000.
-    expect(find.text('¥ 3.000'), findsNWidgets(2));
+    // Amount appears three times: trip total in the header, the (only)
+    // category bar, and the spesa tile.
+    expect(find.text('¥ 3.000'), findsNWidgets(3));
     expect(find.textContaining('≈ €'), findsNothing);
     expect(find.text('€ 0,00'), findsNothing);
     expect(find.text('1 spese senza conversione EUR'), findsOneWidget);
+  });
+
+  testWidgets(
+      'category card notes spese senza conversione when it falls back to '
+      'EUR with mixed currencies', (tester) async {
+    await spesaRepo.insert(Spesa(
+      trasfertaId: trasfertaId,
+      data: DateTime(2026, 7, 11),
+      categoria: Categoria.cena,
+      importo: 45320,
+      valuta: 'JPY',
+      createdAt: DateTime(2026, 7, 11, 20),
+    ));
+    await spesaRepo.insert(Spesa(
+      trasfertaId: trasfertaId,
+      data: DateTime(2026, 7, 12),
+      categoria: Categoria.taxi,
+      importo: 20,
+      valuta: 'EUR',
+      importoEur: 20,
+      createdAt: DateTime(2026, 7, 12, 9),
+    ));
+
+    await pump(tester);
+
+    final categoryCard = find.ancestor(
+        of: find.text('Totali per categoria (EUR)'),
+        matching: find.byType(Card));
+    expect(categoryCard, findsOneWidget);
+    expect(
+        find.descendant(
+            of: categoryCard,
+            matching: find.text('1 spese senza conversione EUR')),
+        findsOneWidget);
+  });
+
+  testWidgets('category card has no senza-conversione note on a '
+      'single-currency trip', (tester) async {
+    await spesaRepo.insert(Spesa(
+      trasfertaId: trasfertaId,
+      data: DateTime(2026, 7, 11),
+      categoria: Categoria.cena,
+      importo: 12,
+      valuta: 'EUR',
+      importoEur: 12,
+      createdAt: DateTime(2026, 7, 11, 21),
+    ));
+
+    await pump(tester);
+
+    expect(find.text('Totali per categoria (EUR)'), findsOneWidget);
+    expect(find.textContaining('spese senza conversione EUR'), findsNothing);
   });
 
   testWidgets('single EUR currency: no redundant ≈ € line', (tester) async {
@@ -306,8 +359,9 @@ void main() {
     expect(find.text('11/07/2026'), findsOneWidget);
     // "Cena" appears twice: category bar label + spesa tile subtitle.
     expect(find.text('Cena'), findsNWidgets(2));
-    // Amount appears twice: per-currency total in the header + spesa tile.
-    expect(find.textContaining('3.000'), findsWidgets);
+    // '¥ 3.000' appears three times: header total, category bar, spesa
+    // tile — all now rendered via formatValuta with JPY's 0 decimals.
+    expect(find.text('¥ 3.000'), findsNWidgets(3));
     expect(find.text('Nessuna spesa registrata'), findsNothing);
   });
 
@@ -488,6 +542,26 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(orchestrator.linguaHints, ['sr']);
+  });
+
+  testWidgets(
+      'scatta infers a ja linguaHint from JPY currency when linguaDefault '
+      'is null', (tester) async {
+    final jpId = await trasfertaRepo.insert(Trasferta(
+      nome: 'Tokyo JPY',
+      dataInizio: DateTime(2026, 7, 10),
+      valutaDefault: 'JPY',
+      createdAt: DateTime(2026, 7, 9),
+    ));
+    final orchestrator = _FakeOrchestrator();
+    await pump(tester, orchestrator: orchestrator, id: jpId);
+
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('sheet-scatta')));
+    await tester.pumpAndSettle();
+
+    expect(orchestrator.linguaHints, ['ja']);
   });
 
   testWidgets('annulla during progress: no form opens, back on detail',

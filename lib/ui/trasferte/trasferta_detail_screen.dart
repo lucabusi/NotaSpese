@@ -9,6 +9,7 @@ import '../../core/utils/formatters.dart';
 import '../../data/models/spesa.dart';
 import '../../data/models/trasferta.dart';
 import '../../services/currency/exchange_service.dart';
+import '../../services/ocr/lingua_hint.dart';
 import '../../services/ocr/parsed_receipt.dart';
 import '../../services/ocr/recognition_orchestrator.dart';
 import '../../services/photo/receipt_capture_service.dart';
@@ -217,8 +218,10 @@ class _TrasfertaDetailScreenState extends State<TrasfertaDetailScreen> {
     final t = controller.trasferta;
     final result = await showOcrProgress(
       context,
-      widget.orchestrator
-          .recognize(path, engine: engine, linguaHint: t?.linguaDefault),
+      widget.orchestrator.recognize(path,
+          engine: engine,
+          linguaHint:
+              effectiveLinguaHint(t?.linguaDefault, t?.valutaDefault)),
     );
     if (result == null || !mounted) return;
     _showFallbackSnackbarIfNeeded(result);
@@ -235,10 +238,11 @@ class _TrasfertaDetailScreenState extends State<TrasfertaDetailScreen> {
   Future<ParsedReceipt?> Function() _makeRetryCallback(
       String path, OcrEngine lastEngine, Trasferta? t) {
     var engine = lastEngine;
+    final linguaHint = effectiveLinguaHint(t?.linguaDefault, t?.valutaDefault);
     return () async {
       engine = engine == OcrEngine.mlkit ? OcrEngine.claude : OcrEngine.mlkit;
       final result = await widget.orchestrator
-          .recognize(path, engine: engine, linguaHint: t?.linguaDefault);
+          .recognize(path, engine: engine, linguaHint: linguaHint);
       // Realign to the ENGINE ACTUALLY USED (a claude→mlkit fallback returns
       // mlkit even though `engine` requested claude): the next toggle must
       // start from what was really shown, not from the request.
@@ -385,6 +389,8 @@ class _TrasfertaDetailScreenState extends State<TrasfertaDetailScreen> {
                       _CategoryTotals(
                         totali: controller.totaliPerCategoria,
                         valuta: controller.valutaCategorie,
+                        countSenzaEur: controller.countSenzaEur,
+                        isEurFallback: controller.valutaUnica == null,
                       ),
                     ],
                     const SizedBox(height: 16),
@@ -448,8 +454,10 @@ class _TotalsHeader extends StatelessWidget {
               ),
             // The EUR line is a hint, not the total: hidden when there is
             // nothing converted (would read as a zeroed trip) and when EUR
-            // is already the only currency shown above.
-            if (controller.totaleEur > 0 && controller.valutaUnica != 'EUR')
+            // is already the only currency shown above (shared rule in
+            // currency_rows.dart).
+            if (mostraSuggerimentoEur(
+                controller.totaleEur, controller.totaliPerValuta))
               Padding(
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
@@ -474,10 +482,25 @@ class _TotalsHeader extends StatelessWidget {
 /// Per-category totals (trip currency, or EUR when spese mix currencies)
 /// with proportional bars (mockup "barre").
 class _CategoryTotals extends StatelessWidget {
-  const _CategoryTotals({required this.totali, required this.valuta});
+  const _CategoryTotals({
+    required this.totali,
+    required this.valuta,
+    required this.countSenzaEur,
+    required this.isEurFallback,
+  });
 
   final Map<Categoria, double> totali;
   final String valuta;
+
+  /// Spese excluded from these totals because they have no `importo_eur`
+  /// (only meaningful when [isEurFallback] is true: the SQL behind
+  /// `totaliEurPerCategoria` filters them out silently otherwise).
+  final int countSenzaEur;
+
+  /// Whether [totali] is the EUR fallback (`totaliEurPerCategoria`, used
+  /// when the trip mixes currencies) rather than the original-currency
+  /// totals of a single-currency trip.
+  final bool isEurFallback;
 
   @override
   Widget build(BuildContext context) {
@@ -528,6 +551,15 @@ class _CategoryTotals extends StatelessWidget {
                   ],
                 ),
               ),
+            if (isEurFallback && countSenzaEur > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  '$countSenzaEur spese senza conversione EUR',
+                  style: textTheme.bodySmall
+                      ?.copyWith(color: AppColors.textTertiary),
+                ),
+              ),
           ],
         ),
       ),
@@ -561,7 +593,7 @@ class _SpesaTile extends StatelessWidget {
         title: Text(spesa.fornitore ?? spesa.categoria.label),
         subtitle: Text(spesa.categoria.label),
         trailing: Text(
-          '${spesa.valuta} ${formatImporto(spesa.importo)}',
+          formatValuta(spesa.importo, spesa.valuta),
           style: Theme.of(context).textTheme.titleSmall?.copyWith(
                 fontFeatures: amountFontFeatures,
                 fontWeight: FontWeight.w700,
