@@ -171,7 +171,11 @@ class _TotalHeader extends StatelessWidget {
                     style: textTheme.labelLarge
                         ?.copyWith(color: AppColors.textSecondary)),
                 Text(
-                  formatEur(totale),
+                  // A zero total caused by missing conversions (not by a
+                  // genuinely empty list) would read as "no spese" when
+                  // there actually is unconverted spending: show a dash
+                  // instead, keeping the note below it.
+                  totale == 0 && senzaEur > 0 ? '—' : formatEur(totale),
                   style: textTheme.titleLarge?.copyWith(
                     fontFeatures: amountFontFeatures,
                     fontWeight: FontWeight.w800,

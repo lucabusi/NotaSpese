@@ -150,4 +150,45 @@ void main() {
     expect(find.text('Totale complessivo'), findsOneWidget);
     expect(find.text('esclude 1 spese senza conversione'), findsOneWidget);
   });
+
+  Finder totalHeaderCard() => find.ancestor(
+      of: find.text('Totale complessivo'), matching: find.byType(Card));
+
+  testWidgets(
+      'overall total shows a dash instead of € 0,00 when zero and there '
+      'are unconverted spese', (tester) async {
+    final id = await trasfertaRepo.insert(trasferta(nome: 'Tokyo'));
+    await spesaRepo.insert(Spesa(
+      trasfertaId: id,
+      data: DateTime(2026, 7, 16),
+      categoria: Categoria.cena,
+      importo: 3000,
+      valuta: 'JPY',
+      createdAt: DateTime(2026, 7, 16, 20),
+    ));
+
+    await pump(tester);
+
+    final header = totalHeaderCard();
+    expect(header, findsOneWidget);
+    expect(find.descendant(of: header, matching: find.text('—')),
+        findsOneWidget);
+    expect(find.descendant(of: header, matching: find.text('€ 0,00')),
+        findsNothing);
+  });
+
+  testWidgets(
+      'overall total shows € 0,00 when genuinely empty (no unconverted '
+      'spese)', (tester) async {
+    await trasfertaRepo.insert(trasferta(nome: 'Tokyo'));
+
+    await pump(tester);
+
+    final header = totalHeaderCard();
+    expect(header, findsOneWidget);
+    expect(find.descendant(of: header, matching: find.text('€ 0,00')),
+        findsOneWidget);
+    expect(find.descendant(of: header, matching: find.text('—')),
+        findsNothing);
+  });
 }
