@@ -1,0 +1,18 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'package:nota_spese/services/ocr/mlkit_ocr_service.dart';
+
+/// Only the script choice is host-testable: `TextRecognizer` itself is a
+/// native plugin (cf. the note in MlkitOcrService).
+void main() {
+  test('lingua ja selects the japanese recognizer', () {
+    expect(MlkitOcrService.scriptFor('ja'), TextRecognitionScript.japanese);
+  });
+
+  test('other languages and auto (null) stay on latin', () {
+    expect(MlkitOcrService.scriptFor('it'), TextRecognitionScript.latin);
+    expect(MlkitOcrService.scriptFor('en'), TextRecognitionScript.latin);
+    expect(MlkitOcrService.scriptFor('sr'), TextRecognitionScript.latin);
+    expect(MlkitOcrService.scriptFor(null), TextRecognitionScript.latin);
+  });
+}

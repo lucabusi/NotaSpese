@@ -40,6 +40,13 @@ android {
     }
 }
 
+dependencies {
+    // [FIX] google_mlkit_text_recognition dichiara i modelli non-latini come
+    // compileOnly: senza questa riga TextRecognitionScript.japanese fallisce a
+    // runtime (scontrini JP → testo vuoto). Cf. MlkitOcrService.scriptFor.
+    implementation("com.google.mlkit:text-recognition-japanese:16.0.1")
+}
+
 kotlin {
     compilerOptions {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17

@@ -62,7 +62,8 @@ class RecognitionOrchestrator {
     required bool fallback,
   }) async {
     try {
-      final text = await mlkitOcr.recognizeText(imagePath);
+      final text =
+          await mlkitOcr.recognizeText(imagePath, linguaHint: linguaHint);
       final receipt =
           parser.parse(text, linguaHint: linguaHint).copyWith(engine: OcrEngine.mlkit);
       return RecognitionResult(receipt: receipt, claudeFallbackToMlkit: fallback);

@@ -11,10 +11,12 @@ class _FakeOcrService extends OcrService {
   final String textToReturn;
   final Object? exceptionToThrow;
   bool called = false;
+  String? linguaHintReceived;
 
   @override
-  Future<String> recognizeText(String imagePath) async {
+  Future<String> recognizeText(String imagePath, {String? linguaHint}) async {
     called = true;
+    linguaHintReceived = linguaHint;
     if (exceptionToThrow != null) throw exceptionToThrow!;
     return textToReturn;
   }
@@ -60,6 +62,23 @@ void main() {
       expect(result.receipt.engine, OcrEngine.mlkit);
       expect(result.receipt.rawText, 'Bar Roma\nTotale 12,50\n18/07/2026');
       expect(result.claudeFallbackToMlkit, isFalse);
+    });
+
+    // Without the hint ML Kit runs the latin recognizer on japanese receipts
+    // and returns an empty string (device bug, fase 7).
+    test('forwards linguaHint to mlkitOcr', () async {
+      final mlkit = _FakeOcrService(textToReturn: '');
+      final orchestrator = RecognitionOrchestrator(
+        mlkitOcr: mlkit,
+        claudeOcr: _FakeClaudeOcrService(),
+        parser: parser,
+        apiKeyProvider: () async => null,
+      );
+
+      await orchestrator.recognize('foo.jpg',
+          engine: OcrEngine.mlkit, linguaHint: 'ja');
+
+      expect(mlkit.linguaHintReceived, 'ja');
     });
   });
 

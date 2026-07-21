@@ -153,7 +153,9 @@
 - [x] Parser JP irrobustito su 14 scontrini giapponesi reali (`scontrini_training/`, non versionati): fullwidth, keyword spaziate, `お買上計`/`計`/`取引金額`, date con spazi e ISO, percentuali, vendor da `加盟店名` — accuratezza field-level 60,7% → 100% (2026-07-20, v0.7.1)
 
 ### Bug rilevati (da compilare durante il collaudo)
-- _(nessuno ancora — aggiungere qui)_
+- [x] **BUG-01 — Totale trasferta e totale complessivo sempre 0,00** (2026-07-21, APK release GitHub Actions). Causa radice: `android/app/src/main/AndroidManifest.xml` non dichiarava `android.permission.INTERNET` (i manifest debug/profile la aggiungono da template Flutter, quindi il difetto si vedeva solo in release). Ogni chiamata a frankfurter.app falliva con SocketException → `ExchangeService.convert()` null → campo EUR vuoto → `importo_eur` NULL → `SUM(importo_eur)` = 0. Fix: permesso dichiarato nel manifest main + test di regressione `test/android_manifest_test.dart`. v0.7.2
+- [x] **BUG-02 — ML Kit non estrae nulla dagli scontrini giapponesi** (2026-07-21). Causa radice: `MlkitOcrService` usava sempre `TextRecognitionScript.latin` (decision point annotato in fase 4), che sul giapponese restituisce testo vuoto; inoltre il modello japanese è `compileOnly` nel plugin, quindi non presente nell'APK. Fix: `MlkitOcrService.scriptFor(linguaHint)` sceglie il riconoscitore dalla lingua della trasferta, `linguaHint` propagato da `RecognitionOrchestrator` a `OcrService.recognizeText`, dipendenza `com.google.mlkit:text-recognition-japanese` aggiunta in `build.gradle.kts` e relativo `-dontwarn` rimosso. v0.7.2
+- [ ] **Nota post-fix BUG-01:** le spese già salvate restano con `importo_eur` NULL; vanno riaperte e ricalcolate a mano (pulsante "ricalcola" nel form spesa) perché rientrino nei totali.
 
 **Verifica fase 6b**
 - [ ] Flusso core completo eseguito su dispositivo reale senza crash né bug bloccanti

@@ -4,6 +4,11 @@
          la UI di Play Services e non richiede permessi in-app. -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <!-- [FIX] Tassi di cambio (frankfurter.app) e OCR Claude. I manifest
+         debug/profile la dichiarano da template Flutter, quindi la mancanza
+         qui si vedeva solo nell'APK release: rete KO in silenzio, importo_eur
+         NULL e tutti i totali a zero. -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <application
         android:label="nota_spese"
         android:name="${applicationName}"
