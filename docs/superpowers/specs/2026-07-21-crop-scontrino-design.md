@@ -89,7 +89,7 @@ form e callback "riprova altro motore".
 | unit | `CropRect.isFull` con tolleranza |
 | unit | `CropService.crop` su uno scontrino reale di `scontrini_training/`: dimensioni attese del file prodotto, immagine decodificabile, sorgente intatta |
 | unit | `CropService.crop` con `CropRect.full` → stesso path, nessun file nuovo |
-| widget | `CropScreen`: mostra l'immagine, Annulla → null, Conferma senza modifiche → path invariato, trascinamento di una maniglia → ritaglio effettivo più piccolo |
+| widget | `CropScreen`: mostra l'immagine, Annulla → null, Conferma senza modifiche → path invariato, trascinamento di una maniglia → ritaglio effettivo più piccolo, trascinamento del corpo → traslazione senza ridimensionare, resize del box (rotazione) → il ritaglio resta la stessa frazione |
 | widget | dettaglio trasferta: scatta → compare il crop → conferma → l'OCR riceve il path ritagliato; annullo del crop → nessun OCR, nessun form |
 
 Gotcha noti da rispettare (memoria di progetto): l'IO reale nel corpo di
@@ -104,3 +104,15 @@ Gotcha noti da rispettare (memoria di progetto): l'IO reale nel corpo di
 - Ritaglio della foto aggiunta dal form spesa ("Aggiungi foto"): quella non
   passa dal parser.
 - Ritaglio di foto già salvate.
+
+## Limiti noti
+
+- Decode/crop girano sul thread principale, dietro un dialog di progresso
+  bloccante (non su isolate): a schermo resta comunque ferma per la durata
+  dell'operazione. Non spostato su isolate perché serve una misura reale
+  su device per giustificarne la complessità (canale nativo, marshalling
+  dei byte) — nessun dato oggi indica che sia necessario.
+- Trascinare una maniglia oltre l'angolo opposto scambia gli angoli
+  (es. l'angolo in alto a sinistra diventa quello in basso a destra)
+  invece di fermarsi sul bordo: comportamento tollerato, non un bug da
+  fixare in questa fase.
