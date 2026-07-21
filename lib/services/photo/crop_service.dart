@@ -125,6 +125,15 @@ class CropService {
     return out;
   }
 
+  // NOTE (verified against image 4.9.1): `img.decodeImage` on a JPEG
+  // already bakes EXIF orientation into the pixel buffer and clears the
+  // tag — see getImageFromJpeg in
+  // formats/jpeg/_jpeg_quantize_io.dart, which rotates/flips per the
+  // orientation tag before returning. `sizeOf`/`crop` below therefore see
+  // the DISPLAYED dimensions and pixels for free; do not add a redundant
+  // `img.bakeOrientation` call here — see crop_service_test.dart's "EXIF
+  // orientation" group for the regression test that would catch a change
+  // in this behaviour on a future `image` package upgrade.
   Future<img.Image> _decode(String sourcePath) async {
     final bytes = await File(sourcePath).readAsBytes();
     img.Image? decoded;

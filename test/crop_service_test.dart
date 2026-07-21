@@ -126,4 +126,40 @@ void main() {
       expect(await service.sizeOf(sourcePath), (696, 2000));
     });
   });
+
+  group('EXIF orientation', () {
+    // orientation 6: a landscape-stored buffer that must display as
+    // portrait (rotated 90°). 60x30, asymmetric on purpose so a wrong
+    // rotation is detectable from the dimensions alone (a square source
+    // would hide the bug).
+    late String rotatedPath;
+
+    setUp(() async {
+      final raw = img.Image(width: 60, height: 30);
+      img.fill(raw, color: img.ColorRgb8(128, 128, 128));
+      raw.exif.imageIfd.orientation = 6;
+      rotatedPath = p.join(tempDir.path, 'rotated.jpg');
+      await File(rotatedPath).writeAsBytes(img.encodeJpg(raw));
+    });
+
+    test('sizeOf reports the displayed (rotated) dimensions, not the '
+        'stored buffer\'s', () async {
+      // Stored buffer is 60x30 (landscape); orientation 6 rotates it 90°
+      // to display as 30x60 (portrait).
+      expect(await service.sizeOf(rotatedPath), (30, 60));
+    });
+
+    test('crop applies to the displayed orientation, not the stored '
+        'buffer', () async {
+      // "Top half of the displayed image": on the correctly-oriented
+      // 30x60 image that is 30x30. Applied to the unbaked 60x30 buffer it
+      // would instead yield 60x15 — a different rectangle, proving the
+      // rotation was (or wasn't) applied before the crop math.
+      final out = await service.crop(
+          rotatedPath, const CropRect(left: 0, top: 0, right: 1, bottom: 0.5));
+      final cropped = img.decodeImage(File(out).readAsBytesSync())!;
+      expect(cropped.width, 30);
+      expect(cropped.height, 30);
+    });
+  });
 }
