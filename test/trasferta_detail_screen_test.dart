@@ -630,6 +630,48 @@ void main() {
   });
 
   testWidgets(
+      'scatta: cancelling the OCR progress still deletes the CROP_ file',
+      (tester) async {
+    // OCR never resolves: the flow reaches the cancellable progress dialog
+    // and stops there. The crop temp must not survive that early exit.
+    final orchestrator = _FakeOrchestrator()
+      ..recognizeImpl =
+          (path, engine) => Completer<RecognitionResult>().future;
+    await pump(tester, orchestrator: orchestrator);
+
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('sheet-scatta')));
+    await settleWithRealIo(tester);
+
+    await tester.drag(
+        find.byKey(const Key('crop-handle-tl')), const Offset(40, 40));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('crop-conferma')));
+    // Flush the crop's real IO without pumpAndSettle: the OCR spinner never
+    // stops, so settling would hang. Cycles are enough for crop() to write.
+    for (var i = 0; i < 15; i++) {
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 30)));
+      await tester.pump();
+    }
+
+    List<File> cropFiles() => cropDir
+        .listSync()
+        .whereType<File>()
+        .where((f) => p.basename(f.path).startsWith('CROP_'))
+        .toList();
+    expect(cropFiles(), hasLength(1),
+        reason: 'the drag must have produced a real crop file');
+
+    await tester.tap(find.byKey(const Key('ocr-annulla')));
+    await settleWithRealIo(tester);
+
+    expect(cropFiles(), isEmpty,
+        reason: 'a cancelled OCR must not leak the crop temp file');
+  });
+
+  testWidgets(
       'scatta: confirming without cropping never deletes the capture '
       'itself', (tester) async {
     final orchestrator = _FakeOrchestrator();

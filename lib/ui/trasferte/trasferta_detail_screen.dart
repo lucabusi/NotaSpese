@@ -226,24 +226,29 @@ class _TrasfertaDetailScreenState extends State<TrasfertaDetailScreen> {
     final ritagliata = await CropScreen.show(context,
         imagePath: path, cropService: _cropService);
     if (ritagliata == null || !mounted) return;
-    final t = controller.trasferta;
-    final result = await showOcrProgress(
-      context,
-      widget.orchestrator.recognize(ritagliata,
-          engine: engine,
-          linguaHint:
-              effectiveLinguaHint(t?.linguaDefault, t?.valutaDefault)),
-    );
-    if (result == null || !mounted) return;
-    _showFallbackSnackbarIfNeeded(result);
-    _showCyrillicSnackbarIfNeeded(result, t);
-    await _openSpesaForm(
-      pendingFoto: ritagliata,
-      parsed: result.receipt,
-      onRetryOtherEngine:
-          _makeRetryCallback(ritagliata, result.receipt.engine, t),
-    );
-    await _deleteCropTempFile(ritagliata, path);
+    try {
+      final t = controller.trasferta;
+      final result = await showOcrProgress(
+        context,
+        widget.orchestrator.recognize(ritagliata,
+            engine: engine,
+            linguaHint:
+                effectiveLinguaHint(t?.linguaDefault, t?.valutaDefault)),
+      );
+      if (result == null || !mounted) return;
+      _showFallbackSnackbarIfNeeded(result);
+      _showCyrillicSnackbarIfNeeded(result, t);
+      await _openSpesaForm(
+        pendingFoto: ritagliata,
+        parsed: result.receipt,
+        onRetryOtherEngine:
+            _makeRetryCallback(ritagliata, result.receipt.engine, t),
+      );
+    } finally {
+      // Runs on every exit path — including a cancelled OCR progress and the
+      // !mounted early returns — so a crop temp never outlives the flow.
+      await _deleteCropTempFile(ritagliata, path);
+    }
   }
 
   /// Cleans up the temporary CROP_ file once the form using it has closed.
