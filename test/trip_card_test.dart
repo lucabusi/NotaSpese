@@ -81,6 +81,16 @@ void main() {
     expect(find.textContaining('€'), findsNothing);
   });
 
+  testWidgets('trip with no spese yet shows a zero row in trip currency',
+      (tester) async {
+    await pump(
+        tester,
+        TripCard(
+            item: item(totaliPerValuta: const {}, totaleEur: 0)));
+
+    expect(find.text('¥ 0'), findsOneWidget);
+  });
+
   testWidgets('EUR-only trip shows no redundant euro hint', (tester) async {
     await pump(
         tester,

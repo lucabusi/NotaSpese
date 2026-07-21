@@ -13,6 +13,7 @@ import '../../services/ocr/parsed_receipt.dart';
 import '../../services/ocr/recognition_orchestrator.dart';
 import '../../services/photo/receipt_capture_service.dart';
 import '../../services/settings/settings_service.dart';
+import '../shared/currency_rows.dart';
 import '../spese/ocr_progress.dart';
 import '../spese/spesa_form_screen.dart';
 import 'trasferta_detail_controller.dart';
@@ -436,7 +437,8 @@ class _TotalsHeader extends StatelessWidget {
             Text('Totale trasferta',
                 style: textTheme.labelMedium
                     ?.copyWith(color: AppColors.textSecondary)),
-            for (final e in _righeValuta())
+            for (final e in righeValuta(controller.totaliPerValuta,
+                controller.trasferta?.valutaDefault ?? 'EUR'))
               Text(
                 formatValuta(e.value, e.key),
                 style: textTheme.headlineMedium?.copyWith(
@@ -466,21 +468,6 @@ class _TotalsHeader extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  /// Trip currency first, then the others by descending amount. With no
-  /// spese at all, a single zero row in the trip's own currency.
-  List<MapEntry<String, double>> _righeValuta() {
-    final totali = controller.totaliPerValuta;
-    final valutaTrasferta = controller.trasferta?.valutaDefault ?? 'EUR';
-    if (totali.isEmpty) return [MapEntry(valutaTrasferta, 0)];
-    final entries = totali.entries.toList()
-      ..sort((a, b) {
-        if (a.key == valutaTrasferta) return -1;
-        if (b.key == valutaTrasferta) return 1;
-        return b.value.compareTo(a.value);
-      });
-    return entries;
   }
 }
 

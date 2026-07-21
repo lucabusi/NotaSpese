@@ -4,6 +4,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/formatters.dart';
 import '../../trasferte/trasferte_list_controller.dart';
+import '../currency_rows.dart';
 
 enum TripCardAction { archivia, ripristina, elimina }
 
@@ -95,7 +96,8 @@ class TripCard extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  for (final e in _righeValuta())
+                  for (final e in righeValuta(
+                      item.totaliPerValuta, item.trasferta.valutaDefault))
                     Text(
                       formatValuta(e.value, e.key),
                       style: textTheme.titleMedium?.copyWith(
@@ -135,19 +137,6 @@ class TripCard extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  /// Trip currency first, then the others by descending amount; a zero row
-  /// in the trip currency when there are no spese yet.
-  List<MapEntry<String, double>> _righeValuta() {
-    final valutaTrasferta = item.trasferta.valutaDefault;
-    if (item.totaliPerValuta.isEmpty) return [MapEntry(valutaTrasferta, 0)];
-    return item.totaliPerValuta.entries.toList()
-      ..sort((a, b) {
-        if (a.key == valutaTrasferta) return -1;
-        if (b.key == valutaTrasferta) return 1;
-        return b.value.compareTo(a.value);
-      });
   }
 }
 
