@@ -192,7 +192,7 @@ void main() {
 
     // Amount appears twice: trip total in the header + the (only) category
     // bar, both 3000.
-    expect(find.text('¥ 3.000'), findsWidgets);
+    expect(find.text('¥ 3.000'), findsNWidgets(2));
     expect(find.text('≈ € 17,90'), findsOneWidget);
     expect(find.text('Totali per categoria (JPY)'), findsOneWidget);
   });
@@ -212,7 +212,7 @@ void main() {
 
     // Amount appears twice: trip total in the header + the (only) category
     // bar, both 3000.
-    expect(find.text('¥ 3.000'), findsWidgets);
+    expect(find.text('¥ 3.000'), findsNWidgets(2));
     expect(find.textContaining('≈ €'), findsNothing);
     expect(find.text('€ 0,00'), findsNothing);
     expect(find.text('1 spese senza conversione EUR'), findsOneWidget);
@@ -234,6 +234,62 @@ void main() {
     expect(find.textContaining('≈ €'), findsNothing);
   });
 
+  testWidgets(
+      'header rows: trip currency first, others by descending amount',
+      (tester) async {
+    // Trip currency (EUR, from the fixture) gets the smallest amount, so
+    // the assertion actually pins the "trip currency first" rule rather
+    // than passing by coincidence of a plain amount sort.
+    await spesaRepo.insert(Spesa(
+      trasfertaId: trasfertaId,
+      data: DateTime(2026, 7, 11),
+      categoria: Categoria.cena,
+      importo: 5,
+      valuta: 'EUR',
+      importoEur: 5,
+      createdAt: DateTime(2026, 7, 11, 21),
+    ));
+    await spesaRepo.insert(Spesa(
+      trasfertaId: trasfertaId,
+      data: DateTime(2026, 7, 12),
+      categoria: Categoria.trasporto,
+      importo: 50,
+      valuta: 'USD',
+      importoEur: 46,
+      createdAt: DateTime(2026, 7, 12, 9),
+    ));
+    await spesaRepo.insert(Spesa(
+      trasfertaId: trasfertaId,
+      data: DateTime(2026, 7, 13),
+      categoria: Categoria.altro,
+      importo: 20,
+      valuta: 'GBP',
+      importoEur: 23,
+      createdAt: DateTime(2026, 7, 13, 9),
+    ));
+
+    await pump(tester);
+
+    // Isolate the totals header Card (identified via its fixed label) so
+    // the per-currency row lookup can't match the per-spesa list tiles
+    // rendered further down in the same amounts.
+    final headerCard = find.ancestor(
+        of: find.text('Totale trasferta'), matching: find.byType(Card));
+    expect(headerCard, findsOneWidget);
+
+    double dyOf(String text) => tester
+        .getTopLeft(find.descendant(
+            of: headerCard, matching: find.text(text)))
+        .dy;
+
+    final eurY = dyOf('€ 5,00');
+    final usdY = dyOf('\$ 50,00');
+    final gbpY = dyOf('£ 20,00');
+
+    expect(eurY, lessThan(usdY));
+    expect(usdY, lessThan(gbpY));
+  });
+
   testWidgets('lists spese grouped by date', (tester) async {
     await spesaRepo.insert(Spesa(
       trasfertaId: trasfertaId,
@@ -249,7 +305,7 @@ void main() {
 
     expect(find.text('11/07/2026'), findsOneWidget);
     // "Cena" appears twice: category bar label + spesa tile subtitle.
-    expect(find.text('Cena'), findsWidgets);
+    expect(find.text('Cena'), findsNWidgets(2));
     // Amount appears twice: per-currency total in the header + spesa tile.
     expect(find.textContaining('3.000'), findsWidgets);
     expect(find.text('Nessuna spesa registrata'), findsNothing);
