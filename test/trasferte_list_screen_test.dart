@@ -2,7 +2,9 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nota_spese/core/constants/categories.dart';
 import 'package:nota_spese/data/db/db_helper.dart';
+import 'package:nota_spese/data/models/spesa.dart';
 import 'package:nota_spese/data/models/trasferta.dart';
 import 'package:nota_spese/data/repositories/foto_repository.dart';
 import 'package:nota_spese/data/repositories/spesa_repository.dart';
@@ -129,5 +131,23 @@ void main() {
 
     expect(find.byType(TripCard), findsNothing);
     expect(await trasfertaRepo.getAttive(), isEmpty);
+  });
+
+  testWidgets('overall total warns about spese without conversion',
+      (tester) async {
+    final id = await trasfertaRepo.insert(trasferta(nome: 'Tokyo'));
+    await spesaRepo.insert(Spesa(
+      trasfertaId: id,
+      data: DateTime(2026, 7, 16),
+      categoria: Categoria.cena,
+      importo: 3000,
+      valuta: 'JPY',
+      createdAt: DateTime(2026, 7, 16, 20),
+    ));
+
+    await pump(tester);
+
+    expect(find.text('Totale complessivo'), findsOneWidget);
+    expect(find.text('esclude 1 spese senza conversione'), findsOneWidget);
   });
 }

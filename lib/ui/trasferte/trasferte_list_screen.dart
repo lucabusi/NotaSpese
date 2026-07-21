@@ -125,7 +125,10 @@ class _TrasferteListScreenState extends State<TrasferteListScreen> {
             padding: const EdgeInsets.all(16),
             children: [
               if (!archivio) ...[
-                _TotalHeader(totale: controller.totaleComplessivoEur),
+                _TotalHeader(
+                  totale: controller.totaleComplessivoEur,
+                  senzaEur: controller.countSenzaEurTotale,
+                ),
                 const SizedBox(height: 12),
               ],
               for (final item in controller.items)
@@ -147,9 +150,10 @@ class _TrasferteListScreenState extends State<TrasferteListScreen> {
 }
 
 class _TotalHeader extends StatelessWidget {
-  const _TotalHeader({required this.totale});
+  const _TotalHeader({required this.totale, required this.senzaEur});
 
   final double totale;
+  final int senzaEur;
 
   @override
   Widget build(BuildContext context) {
@@ -157,19 +161,32 @@ class _TotalHeader extends StatelessWidget {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Totale complessivo',
-                style: textTheme.labelLarge
-                    ?.copyWith(color: AppColors.textSecondary)),
-            Text(
-              formatEur(totale),
-              style: textTheme.titleLarge?.copyWith(
-                fontFeatures: amountFontFeatures,
-                fontWeight: FontWeight.w800,
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Totale complessivo',
+                    style: textTheme.labelLarge
+                        ?.copyWith(color: AppColors.textSecondary)),
+                Text(
+                  formatEur(totale),
+                  style: textTheme.titleLarge?.copyWith(
+                    fontFeatures: amountFontFeatures,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
             ),
+            // Cross-trip sums only work in EUR: say what is missing instead
+            // of letting a low total look wrong.
+            if (senzaEur > 0)
+              Text(
+                'esclude $senzaEur spese senza conversione',
+                style: textTheme.bodySmall
+                    ?.copyWith(color: AppColors.textTertiary),
+              ),
           ],
         ),
       ),
