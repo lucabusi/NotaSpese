@@ -102,8 +102,13 @@ class CropService {
     if (safe.isFull) return sourcePath;
 
     final decoded = await _decode(sourcePath);
-    final x = (safe.left * decoded.width).round();
-    final y = (safe.top * decoded.height).round();
+    // Floor the origin below the image edge: `clamped()` only guarantees
+    // left/top <= 1 - minSide, so on a tiny source image rounding can still
+    // push x/y to exactly decoded.width/height, leaving no room for the
+    // width/height clamp below (whose upper bound would then be < 1).
+    final x = (safe.left * decoded.width).round().clamp(0, decoded.width - 1);
+    final y =
+        (safe.top * decoded.height).round().clamp(0, decoded.height - 1);
     final width =
         (safe.width * decoded.width).round().clamp(1, decoded.width - x);
     final height =
@@ -123,15 +128,19 @@ class CropService {
   Future<img.Image> _decode(String sourcePath) async {
     final bytes = await File(sourcePath).readAsBytes();
     img.Image? decoded;
+    Object? decodeError;
     try {
       decoded = img.decodeImage(bytes);
-    } catch (_) {
+    } catch (e) {
       // Some malformed buffers make the format sniffers in `image` throw
       // (e.g. a truncated PSD signature check) instead of returning null.
       decoded = null;
+      decodeError = e;
     }
     if (decoded == null) {
-      throw FormatException('Immagine non valida: $sourcePath');
+      throw FormatException(
+          'Immagine non valida: $sourcePath'
+          '${decodeError != null ? ' ($decodeError)' : ''}');
     }
     return decoded;
   }

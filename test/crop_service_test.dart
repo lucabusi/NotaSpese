@@ -105,6 +105,20 @@ void main() {
               const CropRect(left: 0, top: 0, right: 0.5, bottom: 0.5)),
           throwsA(isA<FormatException>()));
     });
+
+    test('clamps instead of throwing when the origin rounds to the edge '
+        'of a tiny source image', () async {
+      final tiny = img.Image(width: 8, height: 8);
+      final tinyPath = p.join(tempDir.path, 'tiny.jpg');
+      await File(tinyPath).writeAsBytes(img.encodeJpg(tiny));
+
+      final out = await service.crop(tinyPath,
+          const CropRect(left: 0.95, top: 0.95, right: 1, bottom: 1));
+
+      final cropped = img.decodeImage(File(out).readAsBytesSync())!;
+      expect(cropped.width, greaterThanOrEqualTo(1));
+      expect(cropped.height, greaterThanOrEqualTo(1));
+    });
   });
 
   group('CropService.sizeOf', () {
