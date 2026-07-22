@@ -28,8 +28,29 @@ String normalizeOcrText(String text) {
       buffer.writeCharCode(rune);
     }
   }
-  return buffer.toString();
+  // [FIX] ML Kit splits thousands groups after the comma (`¥1, 489`):
+  // rejoin only when exactly 3 digits follow, so decimal commas
+  // (`1, 50`) are left alone.
+  return buffer.toString().replaceAllMapped(
+        _splitThousands,
+        (m) => '${m.group(1)},${m.group(2)}',
+      );
 }
+
+final RegExp _splitThousands = RegExp(r'(\d),\s+(\d{3})\b');
+
+/// ML Kit's japanese model systematically reads the `¥` glyph as a `4`
+/// attached to the amount (`¥6,775` → `46,775`, misura su foto reali
+/// 2026-07-22). Rewrites a leading `4` on a comma-grouped number back to
+/// `¥` unless it is part of a longer number or already preceded by `¥`.
+/// Only called for CJK text (see [ReceiptParser.parse]): on latin
+/// receipts a leading 4 is a legitimate digit.
+String fixYenGlyphs(String text) => text.replaceAllMapped(
+      _yenAsFour,
+      (m) => '¥${m.group(1)}',
+    );
+
+final RegExp _yenAsFour = RegExp(r'(?<![0-9¥.,])4(\d{1,3}(?:,\d{3})+)');
 
 /// Line with every space removed, so keyword matching survives the
 /// letter-spacing receipts use for emphasis (`合  計`, `小 計 額`).
@@ -58,12 +79,22 @@ double? parseAmountToken(String token, AmountNumberFormat format) {
 }
 
 /// Rightmost parseable number on [lines[index]], or (OCR column layout)
-/// on the following line if the keyword line itself has none.
-double? _valueNearLine(List<String> lines, int index, AmountNumberFormat format) {
-  final v = _rightmostValue(lines[index], format);
+/// on the following line if the keyword line itself has none. The next
+/// line is skipped when it matches a negative keyword (`消費税率 10.09%`
+/// after a value-less `クレジットカード支払`, misura su foto reali
+/// 2026-07-22): the column fallback must not steal from excluded lines.
+double? _valueNearLine(
+  List<String> lines,
+  int index,
+  LanguageProfile profile,
+) {
+  final v = _rightmostValue(lines[index], profile.numberFormat);
   if (v != null) return v;
-  if (index + 1 < lines.length) {
-    return _rightmostValue(lines[index + 1], format);
+  if (index + 1 < lines.length &&
+      !_containsAny(
+          _stripSpaces(lines[index + 1]).toLowerCase(),
+          profile.negativeKeywords)) {
+    return _rightmostValue(lines[index + 1], profile.numberFormat);
   }
   return null;
 }
@@ -105,7 +136,7 @@ double? _amountViaKeywords(String text, LanguageProfile profile) {
       final lower = lowerLines[i];
       if (!lower.contains(kw)) continue;
       if (_containsAny(lower, profile.negativeKeywords)) continue;
-      final value = _valueNearLine(lines, i, profile.numberFormat);
+      final value = _valueNearLine(lines, i, profile);
       if (value != null && (best == null || value > best)) {
         best = value;
       }
@@ -243,8 +274,29 @@ bool _isVendorNoiseLine(String line) {
   if (_vendorSlipNoPattern.hasMatch(lower)) return true;
   if (_vendorDateLinePattern.hasMatch(lower)) return true;
   if (!_vendorLetterPattern.hasMatch(line)) return true;
+  // Vendor names never contain `#`: on real photos it shows up in garbled
+  // logo lines (`HARD-oF#`, misura 2026-07-22) printed above the clean name.
+  if (line.contains('#')) return true;
   return false;
 }
+
+final RegExp _vendorLeadingDust = RegExp(r'^[·・.,、。:;\-–—\s]+');
+final RegExp _vendorKanaHyphen = RegExp(r'(?<=[ァ-ヺ])-(?=[ァ-ヺ])');
+final RegExp _vendorLatinKuchi = RegExp(r'(?<=[A-Za-z])口(?=[A-Za-z])');
+final RegExp _vendorStrayLatin = RegExp(r'^[A-Za-z](?=[ァ-ヺ])');
+
+/// Repairs systematic ML Kit glyph errors inside a vendor candidate
+/// (misure su foto reali 2026-07-22): leading punctuation dust (`·健太鼓子`),
+/// ASCII hyphen where katakana uses the long-vowel mark (`ヨ-クベニマル`),
+/// CJK 口 between latin letters (`LAWS口N`), a single stray latin letter
+/// glued to a katakana name by the logo above it (`Kヨークベニマル`).
+String _cleanVendor(String value) => value
+    .trim()
+    .replaceFirst(_vendorLeadingDust, '')
+    .replaceAll(_vendorKanaHyphen, 'ー')
+    .replaceAll(_vendorLatinKuchi, 'O')
+    .replaceFirst(_vendorStrayLatin, '')
+    .trim();
 
 /// Merchant name taken from an explicit `加盟店名` (merchant name) label,
 /// which card slips print instead of a letterhead: the text after the label
@@ -258,7 +310,9 @@ String? _vendorFromLabel(List<String> lines) {
     if (value.trim().isEmpty && i + 1 < lines.length) {
       value = lines[i + 1];
     }
-    value = value.split(RegExp(r'[/／]')).first.trim();
+    // Trailing operator fields may arrive without the `/` separator when the
+    // slip prints them on the same row (`加盟店名宇都宮MS係員65`).
+    value = value.split(RegExp(r'[/／]|係員')).first.trim();
     if (value.isNotEmpty && _vendorLetterPattern.hasMatch(value)) return value;
   }
   return null;
@@ -277,9 +331,11 @@ String? extractVendor(String text) {
       .where((line) => line.isNotEmpty)
       .toList();
   final labelled = _vendorFromLabel(lines);
-  if (labelled != null) return labelled;
+  if (labelled != null) return _cleanVendor(labelled);
   for (final line in lines.take(6)) {
-    if (!_isVendorNoiseLine(line)) return line;
+    if (_isVendorNoiseLine(line)) continue;
+    final cleaned = _cleanVendor(line);
+    if (cleaned.isNotEmpty) return cleaned;
   }
   return null;
 }
@@ -355,7 +411,9 @@ List<String> _candidateOrder(String text, String? linguaHint) {
 /// `copyWith(engine: OcrEngine.claude)`.
 class ReceiptParser {
   ParsedReceipt parse(String rawText, {String? linguaHint}) {
-    final text = normalizeOcrText(rawText);
+    var text = normalizeOcrText(rawText);
+    // Yen-glyph repair only makes sense on japanese receipts.
+    if (detectScript(text) == 'ja') text = fixYenGlyphs(text);
     try {
       final fornitore = extractVendor(text);
       String? bestCode;

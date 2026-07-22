@@ -79,6 +79,12 @@ final Map<String, LanguageProfile> languageProfiles = {
       'お会計',
       '合計',
       '総計',
+      // Card receipts where every 合計 line is killed by a negative keyword
+      // (misure su foto reali 2026-07-22): the card-payment amount and the
+      // bare 金額 label are the only clean totals left. Both stay below the
+      // explicit total keywords and above the bare 計.
+      'クレジット',
+      '金額',
       '計',
     ],
     negativeKeywords: [

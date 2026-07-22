@@ -19,6 +19,36 @@ void main() {
     test('kana and kanji left untouched', () {
       expect(normalizeOcrText('ヨークベニマル 領収証'), 'ヨークベニマル 領収証');
     });
+
+    test('space after thousands comma rejoined (ML Kit splits ¥1, 489)', () {
+      expect(normalizeOcrText('合計 1, 508'), '合計 1,508');
+      expect(normalizeOcrText('買上金額 ¥1, 489'), '買上金額 ¥1,489');
+    });
+
+    test('decimal comma with fewer than 3 digits untouched', () {
+      expect(normalizeOcrText('totale 1, 50'), 'totale 1, 50');
+    });
+  });
+
+  // ML Kit's japanese model reads the ¥ glyph as a leading `4` attached to
+  // the amount (`¥6,775` → `46,775`, misura su foto reali 2026-07-22).
+  group('fixYenGlyphs', () {
+    test('leading 4 on a comma-grouped number becomes ¥', () {
+      expect(fixYenGlyphs('小計 46,775'), '小計 ¥6,775');
+      expect(fixYenGlyphs('クレジット- (417,780)'), 'クレジット- (¥17,780)');
+      expect(fixYenGlyphs('合計金額: 48,480'), '合計金額: ¥8,480');
+    });
+
+    test('numbers not starting with 4 or without comma grouping untouched', () {
+      expect(fixYenGlyphs('合計 17,780'), '合計 17,780');
+      expect(fixYenGlyphs('アボカドコロッケ 4680'), 'アボカドコロッケ 4680');
+      expect(fixYenGlyphs('金額 4,500'), '金額 4,500');
+    });
+
+    test('4 inside a longer number untouched', () {
+      expect(fixYenGlyphs('会員番号 946,000'), '会員番号 946,000');
+      expect(fixYenGlyphs('¥46,680'), '¥46,680');
+    });
   });
 
   group('ja receipts - spacing, full-width and percent handling', () {
@@ -51,6 +81,32 @@ void main() {
         extractDate('2026-07-11 22:11:07', ja, now: DateTime(2026, 7, 20)),
         DateTime(2026, 7, 11),
       );
+    });
+
+    test('クレジット payment line wins over slip-number fallback', () {
+      // JP_01 reale: la riga 合計 è uccisa dai negativi 税/対象, l'unico
+      // totale pulito è la riga di pagamento carta.
+      const text = '10%税率対象合計 ¥6,680\n'
+          'クレジット ¥6,680\n'
+          'シートNo:90246';
+      expect(extractAmount(text, ja), 6680);
+    });
+
+    test('keyword line without value never steals from a negative next line',
+        () {
+      // Taxi JP_05 reale: `クレジットカード支払、` non ha numeri e la riga
+      // dopo è la tax-rate line — il totale vero sta sul bare 計.
+      const text = 'クレジットカード支払、\n'
+          '消費税率 10. 09%\n'
+          '計 5520円';
+      expect(extractAmount(text, ja), 5520);
+    });
+
+    test('金額 label on a card slip wins over processing numbers', () {
+      // JP_14 reale: nessuna keyword 合計/クレジット con valore, il totale
+      // sta su una riga `金額 ¥2,640`.
+      const text = '処理通番 374753\n金額 ¥2,640';
+      expect(extractAmount(text, ja), 2640);
     });
 
     test('merchant label wins over document-type header lines', () {
@@ -310,6 +366,52 @@ void main() {
 
     test('empty text -> null', () {
       expect(extractVendor(''), null);
+    });
+
+    // Fix da misura ML Kit su foto reali (2026-07-22): il nome insegna è
+    // spesso un logo garbled sulla prima riga, mentre la ragione sociale
+    // pulita sta subito sotto.
+    group('ML Kit real-photo glyph fixes', () {
+      test('garbled logo line with # skipped in favor of the clean line', () {
+        // JP_01 reale: logo HARD・OFF letto `HARD-oF#`.
+        const text = 'HARD-oF#\nハードオフ宇都宮駅東店\nTEL: 028-664-2556';
+        expect(extractVendor(text), 'ハードオフ宇都宮駅東店');
+      });
+
+      test('ASCII hyphen between katakana becomes long-vowel mark', () {
+        // JP_03 reale: `ヨ-クベニマル`.
+        const text = 'ヨ-クベニマル\nお取替·返品の際はレシートをお持ち';
+        expect(extractVendor(text), 'ヨークベニマル');
+      });
+
+      test('single stray latin letter glued to a katakana name stripped', () {
+        // JP_04 reale: logo letto come `K` attaccata all insegna.
+        const text = 'Kヨークベニマル\nお取替·返品の際はレシートをお持ち';
+        expect(extractVendor(text), 'ヨークベニマル');
+      });
+
+      test('merchant label value cut at 係員 even without slash', () {
+        // JP_06 reale: `加盟店名宇都宮MS係員65` (JP_05 ha lo slash, JP_06 no).
+        const text = 'クレジットカード売上票\n加盟店名宇都宮MS係員65';
+        expect(extractVendor(text), '宇都宮MS');
+      });
+
+      test('CJK 口 between latin letters becomes O', () {
+        // JP_10 reale: `LAWS口N`.
+        const text = 'LAWS口N\n宇者都宮駅西口店';
+        expect(extractVendor(text), 'LAWSON');
+      });
+
+      test('leading punctuation dust stripped', () {
+        // JP_12 reale: `·健太鼓子`.
+        const text = '·健太鼓子\n,宇部雪鉄子館';
+        expect(extractVendor(text), '健太鼓子');
+      });
+
+      test('legitimate latin hyphen and interpunct names untouched', () {
+        expect(extractVendor('SEVEN-ELEVEN\nVia Roma 1'), 'SEVEN-ELEVEN');
+        expect(extractVendor('HARD・OFF\n宇都宮駅東店'), 'HARD・OFF');
+      });
     });
   });
 
