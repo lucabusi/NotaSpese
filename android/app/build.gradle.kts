@@ -8,7 +8,8 @@ android {
     namespace = "it.lucabusi.nota_spese"
     // 36: required by fase-4 plugins (image_picker, mlkit scanner, share_plus).
     compileSdk = 36
-    ndkVersion = "27.0.12077973"
+    // 28.2: required by mlkit/jni/integration_test plugins (backward compatible).
+    ndkVersion = "28.2.13676358"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
