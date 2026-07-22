@@ -412,6 +412,16 @@ void main() {
         expect(extractVendor('SEVEN-ELEVEN\nVia Roma 1'), 'SEVEN-ELEVEN');
         expect(extractVendor('HARD・OFF\n宇都宮駅東店'), 'HARD・OFF');
       });
+
+      test('merchant label 加盟店名 misread as カ盟店名 still recognized', () {
+        // Taxi reale (2026-07-22): 加 (kanji) letto カ (katakana), la riga
+        // label non veniva più riconosciuta e il parser cadeva sul rumore
+        // in cima allo scontrino (`No0 O 1`).
+        const text = 'No0 O 1\nクレジットカード売上票\nお客様控\n'
+            '2026年07月22日17:43\n車番 2023\n乗務員No 266\n'
+            'カ盟店名 宇都宮MS/係員266';
+        expect(extractVendor(text), '宇都宮MS');
+      });
     });
   });
 

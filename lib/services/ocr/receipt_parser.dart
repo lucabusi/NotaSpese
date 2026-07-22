@@ -257,8 +257,10 @@ final RegExp _vendorSlipNoPattern = RegExp(r'^no\.?\s*\d+$', caseSensitive: fals
 final RegExp _vendorDateLinePattern = RegExp(r'\d{4}\s*[年/-]\s*\d{1,2}');
 
 /// Label a card slip uses to introduce the merchant name; the value may sit
-/// after the label on the same line or on the next one.
-final RegExp _vendorLabelPattern = RegExp(r'加盟店名?|ご利用店舗|店舗名');
+/// after the label on the same line or on the next one. `カ盟店名` is ML
+/// Kit misreading 加 (kanji) as カ (katakana) on this exact fixed phrase
+/// (misura su foto reali 2026-07-22, scontrino taxi).
+final RegExp _vendorLabelPattern = RegExp(r'[加カ]盟店名?|ご利用店舗|店舗名');
 
 /// Whether [line] looks like noise rather than a vendor name: an address
 /// with a zip code, a VAT number, a phone number, a URL, a document-type
