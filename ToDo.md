@@ -137,14 +137,14 @@
 
 > Prima fase con l'app in mano all'utente: installazione dell'APK (build GitHub Actions) su dispositivo Android reale, uso in ambiente reale e fix dei bug rilevati. Recupera anche tutte le verifiche **SKIP esplicito** accumulate nelle fasi 0b-6 (ambiente Android incompleto sulla macchina dev).
 
-- [ ] Installare l'APK release (artifact GitHub Actions, v0.7.0+7 o successiva) sul dispositivo reale
-- [ ] Collaudo del flusso core: scatta scontrino → scanner/crop → OCR → form pre-compilato → salva → foto in lista → viewer → elimina
+- [x] Installare l'APK release sul dispositivo reale — **fatto 2026-07-24** (build locale `flutter build apk --release` v0.9.3+14 col fix BUG-04, `adb install -r` su OnePlus CPH2173); la build CI riparte col push di questo fix
+- [ ] Collaudo del flusso core: scatta scontrino → scanner/crop → OCR → form pre-compilato → salva → foto in lista → viewer → elimina — **verificato 2026-07-24 fino a "form pre-compilato" (scatta→scanner automatico→OCR→importo/data/fornitore)**; salva→lista→viewer→elimina ancora da ricollaudare su device in una sessione con l'utente
 - [ ] Recupero verifiche SKIP delle fasi precedenti:
   - [ ] App parte senza crash, tema corretto (fase 0b)
   - [ ] CRUD trasferte completo senza crash (fase 2)
   - [ ] Spesa manuale: crea → lista → totali → modifica → elimina (fase 3)
-  - [ ] Foto: scatto → salva → thumbnail → viewer → eliminazione file dal filesystem; API Document Scanner (beta) funzionante o fallback camera (fase 4)
-  - [ ] OCR scontrino reale IT: form pre-compilato corretto; verificare limitazione script latino ML Kit su JA (decision point in `mlkit_ocr_service.dart`) (fase 5)
+  - [ ] Foto: scatto → salva → thumbnail → viewer → eliminazione file dal filesystem; **API Document Scanner verificata funzionante su device (2026-07-24, dopo fix BUG-04)** — scatto→salva→thumbnail→viewer→eliminazione non ancora ricollaudati end-to-end in questa sessione (fase 4)
+  - [x] OCR scontrino reale → form pre-compilato corretto: **verificato su device 2026-07-24 (scontrino JP reale: importo, data, fornitore compilati)**; script giapponese ML Kit confermato funzionante in release dopo il fix BUG-04 (fase 5)
   - [ ] Conversione EUR: spesa JPY/USD online → EUR auto; modalità aereo → campo vuoto editabile, nessun blocco (fase 6)
 - [ ] Raccolta bug: ogni anomalia rilevata dall'utente registrata qui sotto come checkbox (data, passi per riprodurre, comportamento atteso vs osservato)
 - [ ] Fix dei bug raccolti: causa radice (`systematic-debugging`), test di regressione dove la logica è testabile su host, niente fix sintomatici
@@ -161,6 +161,7 @@
 - [ ] **Nota post-fix BUG-01:** le spese già salvate restano con `importo_eur` NULL; vanno riaperte e ricalcolate a mano (pulsante "ricalcola" nel form spesa) perché rientrino nei totali.
 - [x] **BUG-03 — Importo primario in EUR invece che nella valuta originale** (2026-07-21). L'app dava rilievo a un dato derivato e opzionale (`importo_eur`): senza conversione tutte le schermate mostravano `€ 0,00` pur avendo spese registrate. Fix: totali primari per valuta originale in header dettaglio e card lista, EUR come riga secondaria nascosta quando manca o quando è già l'unica valuta, categorie in valuta originale se la trasferta ne ha una sola, nota `esclude N spese senza conversione` sul totale complessivo. Spec `docs/superpowers/specs/2026-07-21-importo-primario-valuta-originale-design.md`. v0.8.0
 - [x] **Ritaglio dopo lo scatto** (2026-07-21, v0.9.0): schermata di crop in-app tra cattura e OCR (`lib/ui/foto/crop_screen.dart` + `lib/services/photo/crop_service.dart`, Dart puro sopra il pacchetto `image`, nessuna dipendenza nativa). Il rettangolo parte sull'immagine intera: confermare senza trascinare non ricodifica il file. Il ritaglio vale sia per il testo passato all'OCR sia per la foto salvata. Spec: `docs/superpowers/specs/2026-07-21-crop-scontrino-design.md`.
+- [x] **BUG-04 — scanner automatico e OCR non funzionano nell'APK release** (2026-07-24, segnalato dall'utente: "in debug funziona, nell'APK no"). Causa radice **provata su device** con `adb logcat`: sia `google_mlkit_document_scanner` sia `google_mlkit_text_recognizer` lanciavano `NullPointerException` nella stessa classe interna ML Kit offuscata (`mlkit_common.zzsr`, de-offuscata dal `mapping.txt`), perché **R8 full mode** (default AGP 8+) ottimizza troppo aggressivamente le classi interne su cui i plugin Flutter fanno affidamento. I due `catch (_)` in `_captureScatta`/orchestrator mascheravano le eccezioni → lo scanner ripiegava sulla fotocamera semplice (niente auto-crop) e l'OCR restituiva vuoto. In debug non c'è minificazione, quindi tutto funzionava: **stesso codice, differenza solo di build mode**. Fix: `android.enableR8.fullMode=false` in `android/gradle.properties` (commit `da473bc`). **Verificato su device** (OnePlus CPH2173, rebuild `flutter build apk --release` + `adb install -r`): 0 errori MethodChannel, scanner automatico con rilevamento bordi funzionante, OCR compila importo/data/fornitore. Gotcha registrato: l'harness OCR integration gira in debug/profile, quindi non validava mai la release → il bug è rimasto invisibile fino al collaudo manuale.
 
 **Verifica fase 6b**
 - [ ] Flusso core completo eseguito su dispositivo reale senza crash né bug bloccanti
