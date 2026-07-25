@@ -70,4 +70,55 @@ void main() {
     );
     expect(bytes.lengthInBytes, greaterThan(0));
   });
+
+  group('coverEurNote', () {
+    test('totaleEur>0 & countSenzaEur==0 → ≈ EUR, no exclusion note', () {
+      final note = coverEurNote(65.0, 0);
+      expect(note, startsWith('≈'));
+      expect(note, isNot(contains('esclude')));
+    });
+
+    test('totaleEur>0 & countSenzaEur>0 → includes exclusion note', () {
+      final note = coverEurNote(65.0, 2);
+      expect(note, startsWith('≈'));
+      expect(note, contains('esclude 2 spese non convertite'));
+    });
+
+    test('totaleEur==0 & countSenzaEur>0 → exclusion note without ≈ EUR 0',
+        () {
+      final note = coverEurNote(0, 1);
+      expect(note, contains('esclude 1 spese non convertite'));
+      expect(note, isNot(startsWith('≈')));
+    });
+
+    test('totaleEur==0 & countSenzaEur==0 → null', () {
+      expect(coverEurNote(0, 0), isNull);
+    });
+  });
+
+  group('fotoCaption', () {
+    ReportRow row({String? fornitore}) => ReportRow(
+          spesaId: 1,
+          data: DateTime(2026, 7, 2),
+          categoria: Categoria.pranzo,
+          fornitore: fornitore,
+          importo: 1000,
+          valuta: 'JPY',
+          importoEur: 6.5,
+        );
+
+    test('with fornitore → 4 parts including the vendor', () {
+      final caption = fotoCaption(row(fornitore: 'Sushi Bar'));
+      final parts = caption.split(' · ');
+      expect(parts, hasLength(4));
+      expect(parts, contains('Sushi Bar'));
+    });
+
+    test('without fornitore → 3 parts, category not duplicated', () {
+      final caption = fotoCaption(row());
+      final parts = caption.split(' · ');
+      expect(parts, hasLength(3));
+      expect(caption.split(Categoria.pranzo.label).length - 1, 1);
+    });
+  });
 }

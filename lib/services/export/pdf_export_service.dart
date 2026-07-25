@@ -1,11 +1,39 @@
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import '../../core/utils/formatters.dart';
 import 'trasferta_report.dart';
+
+/// Cover EUR line text, consistent with the CSV exclusion note (gated on
+/// [countSenzaEur] alone, not on [totaleEur]): a trip entirely in a
+/// non-convertible currency has `totaleEur == 0` but must still surface the
+/// exclusion note instead of silently dropping it.
+@visibleForTesting
+String? coverEurNote(double totaleEur, int countSenzaEur) {
+  if (totaleEur > 0) {
+    return '≈ ${formatEur(totaleEur)}'
+        '${countSenzaEur > 0 ? ' (esclude $countSenzaEur spese non convertite)' : ''}';
+  }
+  if (countSenzaEur > 0) {
+    return 'esclude $countSenzaEur spese non convertite';
+  }
+  return null;
+}
+
+/// Photo caption: `data · fornitore · importo valuta · categoria`. When
+/// [ReportRow.fornitore] is missing, that slot is omitted entirely rather
+/// than substituted with the category (which would then appear twice).
+@visibleForTesting
+String fotoCaption(ReportRow r) => [
+      formatDate(r.data),
+      if (r.fornitore != null && r.fornitore!.isNotEmpty) r.fornitore!,
+      formatValuta(r.importo, r.valuta),
+      r.categoria.label,
+    ].join(' · ');
 
 /// Loaded PDF fonts: Latin base + bold, Japanese fallback. Loading touches
 /// the asset bundle, so it is kept out of [PdfExportService] (pure renderer).
@@ -102,13 +130,9 @@ class PdfExportService {
         pw.SizedBox(height: 6),
         for (final e in report.totaliPerValuta.entries)
           pw.Text(formatValuta(e.value, e.key), style: const pw.TextStyle(fontSize: 12)),
-        if (report.totaleEur > 0) ...[
+        if (coverEurNote(report.totaleEur, report.countSenzaEur) case final note?) ...[
           pw.SizedBox(height: 2),
-          pw.Text(
-            '≈ ${formatEur(report.totaleEur)}'
-            '${report.countSenzaEur > 0 ? ' (esclude ${report.countSenzaEur} spese non convertite)' : ''}',
-            style: const pw.TextStyle(fontSize: 11),
-          ),
+          pw.Text(note, style: const pw.TextStyle(fontSize: 11)),
         ],
         pw.SizedBox(height: 20),
         pw.Text('PER CATEGORIA (${report.valutaCategorie})',
@@ -134,7 +158,7 @@ class PdfExportService {
         );
 
     final rows = <pw.TableRow>[
-      pw.TableRow(children: [
+      pw.TableRow(repeat: true, children: [
         cell('Data', header: true),
         cell('Categoria', header: true),
         cell('Fornitore', header: true),
@@ -178,15 +202,7 @@ class PdfExportService {
   }
 
   pw.Widget _fotoBlock(ReportRow r, Uint8List bytes) {
-    final didascalia = [
-      formatDate(r.data),
-      if (r.fornitore != null && r.fornitore!.isNotEmpty)
-        r.fornitore
-      else
-        r.categoria.label,
-      formatValuta(r.importo, r.valuta),
-      r.categoria.label,
-    ].join(' · ');
+    final didascalia = fotoCaption(r);
     return pw.Padding(
       padding: const pw.EdgeInsets.all(8),
       child: pw.Column(
