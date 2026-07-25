@@ -200,11 +200,11 @@
 - [ ] Su dispositivo reale (quando disponibile, con fase 6b): scatto → crop → OCR sul ritaglio → form pre-compilato
 
 ## Fase 7 — Export CSV / PDF ▢
-- [ ] `csv_export_service.dart`: export flat spese trasferta (tutte le colonne, separatore compatibile Excel IT)
-- [ ] `pdf_export_service.dart`: copertina (trasferta, periodo, totali) + tabella spese + pagine foto scontrini
-- [ ] Condivisione via share sheet Android (`share_plus`, `Share.shareXFiles` — verificare parametri sul changelog della versione installata)
-- [ ] Voci export nel menu del dettaglio trasferta
-- [ ] Unit test generazione CSV (contenuto e escaping)
+- [x] `csv_export_service.dart`: export flat spese trasferta (tutte le colonne, separatore compatibile Excel IT)
+- [x] `pdf_export_service.dart`: copertina (trasferta, periodo, totali) + tabella spese + pagine foto scontrini
+- [x] Condivisione via share sheet Android (`share_plus`, `Share.shareXFiles` — verificare parametri sul changelog della versione installata)
+- [x] Voci export nel menu del dettaglio trasferta
+- [x] Unit test generazione CSV (contenuto e escaping)
 
 **Verifica fase 7**
 - [ ] Export di una trasferta reale con foto: PDF apribile e completo, CSV importabile in Excel/Calc, share sheet funzionante

@@ -9,6 +9,8 @@ import '../../core/utils/formatters.dart';
 import '../../data/models/spesa.dart';
 import '../../data/models/trasferta.dart';
 import '../../services/currency/exchange_service.dart';
+import '../../services/export/export_service.dart';
+import '../../services/export/trasferta_report.dart';
 import '../../services/ocr/lingua_hint.dart';
 import '../../services/ocr/parsed_receipt.dart';
 import '../../services/ocr/recognition_orchestrator.dart';
@@ -27,7 +29,14 @@ extension _OcrEngineLabel on OcrEngine {
   String get label => this == OcrEngine.claude ? 'Claude' : 'ML Kit';
 }
 
-enum DetailAction { modifica, archivia, ripristina, elimina }
+enum DetailAction {
+  modifica,
+  archivia,
+  ripristina,
+  elimina,
+  esportaPdf,
+  esportaCsv
+}
 
 /// Trip detail (fase 2 skeleton): totals header, spese list (usually
 /// empty until fase 3), FAB placeholder. Pops `true` after archive/delete
@@ -41,6 +50,7 @@ class TrasfertaDetailScreen extends StatefulWidget {
     required this.settingsService,
     required this.exchangeService,
     required this.cropService,
+    this.exportService,
   });
 
   final TrasfertaDetailController controller;
@@ -49,6 +59,7 @@ class TrasfertaDetailScreen extends StatefulWidget {
   final SettingsService settingsService;
   final ExchangeService exchangeService;
   final CropService cropService;
+  final ExportService? exportService;
 
   @override
   State<TrasfertaDetailScreen> createState() => _TrasfertaDetailScreenState();
@@ -58,6 +69,9 @@ class _TrasfertaDetailScreenState extends State<TrasfertaDetailScreen> {
   TrasfertaDetailController get controller => widget.controller;
 
   CropService get _cropService => widget.cropService;
+
+  late final ExportService _exportService =
+      widget.exportService ?? ExportService();
 
   // Cached (not re-fetched per build, gotcha: a fresh Future in build would
   // rebuild forever) sheet defaults; loaded once, best-effort.
@@ -123,6 +137,39 @@ class _TrasfertaDetailScreenState extends State<TrasfertaDetailScreen> {
           await controller.elimina();
           if (mounted) Navigator.of(context).pop(true);
         }
+      case DetailAction.esportaPdf:
+        await _esporta(pdf: true);
+      case DetailAction.esportaCsv:
+        await _esporta(pdf: false);
+    }
+  }
+
+  Future<void> _esporta({required bool pdf}) async {
+    final t = controller.trasferta;
+    if (t == null) return;
+    final spese = [for (final l in controller.speseByData.values) ...l];
+    if (spese.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Nessuna spesa da esportare')));
+      return;
+    }
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(const SnackBar(
+        content: Text('Generazione in corso…'),
+        duration: Duration(seconds: 30)));
+    try {
+      final report = TrasfertaReport.build(t, spese);
+      if (pdf) {
+        final fotoBytes = await controller.fotoBytesBySpesa();
+        await _exportService.exportPdf(report, t, fotoBytes);
+      } else {
+        await _exportService.exportCsv(report, t);
+      }
+      messenger.hideCurrentSnackBar();
+    } catch (_) {
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(const SnackBar(
+          content: Text('Esportazione non riuscita')));
     }
   }
 
@@ -403,6 +450,15 @@ class _TrasfertaDetailScreenState extends State<TrasfertaDetailScreen> {
                         value: DetailAction.archivia, child: Text('Archivia')),
                   const PopupMenuItem(
                       value: DetailAction.elimina, child: Text('Elimina')),
+                  const PopupMenuDivider(),
+                  const PopupMenuItem(
+                      key: Key('detail-export-pdf'),
+                      value: DetailAction.esportaPdf,
+                      child: Text('Esporta PDF')),
+                  const PopupMenuItem(
+                      key: Key('detail-export-csv'),
+                      value: DetailAction.esportaCsv,
+                      child: Text('Esporta CSV')),
                 ],
               ),
             ],

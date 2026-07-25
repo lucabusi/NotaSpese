@@ -11,6 +11,7 @@ import 'package:nota_spese/data/models/trasferta.dart';
 import 'package:nota_spese/data/repositories/foto_repository.dart';
 import 'package:nota_spese/data/repositories/spesa_repository.dart';
 import 'package:nota_spese/data/repositories/trasferta_repository.dart';
+import 'package:nota_spese/services/export/export_service.dart';
 import 'package:nota_spese/services/ocr/claude_ocr_service.dart';
 import 'package:nota_spese/services/ocr/mlkit_ocr_service.dart';
 import 'package:nota_spese/services/ocr/parsed_receipt.dart';
@@ -100,6 +101,18 @@ class _FakeCropService extends CropService {
   Future<String> crop(String sourcePath, CropRect rect) async => output;
 }
 
+/// Fake export service: records which export was triggered instead of
+/// actually writing/sharing a file.
+class _FakeExportService extends ExportService {
+  _FakeExportService() : super(share: ((_) async {}));
+  final List<String> calls = [];
+  @override
+  Future<void> exportCsv(report, trasferta) async => calls.add('csv');
+  @override
+  Future<void> exportPdf(report, trasferta, fotoBytes) async =>
+      calls.add('pdf');
+}
+
 void main() {
   setUpAll(sqfliteFfiInit);
 
@@ -158,7 +171,8 @@ void main() {
   Future<void> pump(WidgetTester tester,
       {_FakeOrchestrator? orchestrator,
       int? id,
-      CropService? cropService}) async {
+      CropService? cropService,
+      ExportService? exportService}) async {
     await tester.pumpWidget(MaterialApp(
       home: TrasfertaDetailScreen(
         controller: TrasfertaDetailController(
@@ -169,6 +183,7 @@ void main() {
         exchangeService: FakeExchangeService(),
         cropService: cropService ??
             CropService(tempDirProvider: () async => cropDir.path),
+        exportService: exportService,
       ),
     ));
     await tester.pumpAndSettle();
@@ -902,5 +917,40 @@ void main() {
 
     expect(find.textContaining('cirillico'), findsOneWidget);
     expect(find.textContaining('API key'), findsOneWidget);
+  });
+
+  testWidgets('CSV menu voice triggers the CSV export', (tester) async {
+    await spesaRepo.insert(Spesa(
+      trasfertaId: trasfertaId,
+      data: DateTime(2026, 7, 11),
+      categoria: Categoria.cena,
+      importo: 12,
+      valuta: 'EUR',
+      importoEur: 12,
+      createdAt: DateTime(2026, 7, 11, 21),
+    ));
+    final export = _FakeExportService();
+    await pump(tester, exportService: export);
+
+    await tester.tap(find.byType(PopupMenuButton<DetailAction>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('detail-export-csv')));
+    await tester.pumpAndSettle();
+
+    expect(export.calls, ['csv']);
+  });
+
+  testWidgets('export with no spese shows a SnackBar and does not export',
+      (tester) async {
+    final export = _FakeExportService();
+    await pump(tester, exportService: export); // empty trip
+
+    await tester.tap(find.byType(PopupMenuButton<DetailAction>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('detail-export-pdf')));
+    await tester.pumpAndSettle();
+
+    expect(export.calls, isEmpty);
+    expect(find.text('Nessuna spesa da esportare'), findsOneWidget);
   });
 }

@@ -1,3 +1,3 @@
 /// App version, shown in Settings and logs.
 /// Bump on every functional change (keep in sync with pubspec.yaml).
-const String appVersion = '0.9.3';
+const String appVersion = '0.10.0';
