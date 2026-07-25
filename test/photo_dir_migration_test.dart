@@ -102,10 +102,10 @@ void main() {
   test('a destination created by the migration is fully removed on abort',
       () async {
     seed();
-    // `zzz_blocked.jpg` is a lone top-level source: whichever order
-    // `listSync` returns the (only) files in, `to` must be created before
-    // this one's copy is attempted, since its target's parent *is* `to`
-    // itself — so this case is robust in every ordering.
+    // `to` does not exist yet, so whichever of the seeded sources `listSync`
+    // yields first creates `to` as part of its target's ancestor walk. By the
+    // time `zzz_blocked.jpg` fails, `to` is therefore always a
+    // migration-created directory — this case is robust in every ordering.
     File(p.join(from.path, 'zzz_blocked.jpg')).writeAsStringSync('blocked');
     expect(to.existsSync(), isFalse);
 
