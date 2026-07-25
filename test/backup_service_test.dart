@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nota_spese/data/db/db_helper.dart';
 import 'package:nota_spese/services/backup/backup_service.dart';
 import 'package:path/path.dart' as p;
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
   late Directory root;
@@ -78,5 +79,153 @@ void main() {
 
   test('uploadToDrive is an unimplemented v1.1 stub', () {
     expect(service().uploadToDrive, throwsA(isA<UnimplementedError>()));
+  });
+
+  group('restoreBackup', () {
+    setUpAll(sqfliteFfiInit);
+
+    /// Builds a real nota_spese DB at [path] with one trip called [tripName].
+    /// Deletes any placeholder file first: the setUp fixture writes plain
+    /// text there, and SQLite refuses to open a non-database file.
+    Future<void> writeValidDb(String path, String tripName) async {
+      final existing = File(path);
+      if (existing.existsSync()) existing.deleteSync();
+      final helper =
+          DbHelper(factory: databaseFactoryFfiNoIsolate, path: path);
+      final db = await helper.database;
+      await db.insert('trasferte', {
+        'nome': tripName,
+        'data_inizio': '2026-07-25',
+        'valuta_default': 'EUR',
+        'archiviata': 0,
+        'created_at': '2026-07-25T10:00:00.000',
+      });
+      await helper.close();
+    }
+
+    /// Zips [dbPath] + [photos] the same way createBackup does.
+    Future<File> zipOf({required String dbPath, Directory? photos}) async {
+      final zip = File(p.join(root.path, 'source_backup.zip'));
+      final encoder = ZipFileEncoder()..create(zip.path);
+      await encoder.addFile(File(dbPath), DbHelper.dbFileName);
+      if (photos != null) {
+        for (final entity in photos.listSync(recursive: true)) {
+          if (entity is! File) continue;
+          final relative =
+              p.split(p.relative(entity.path, from: photos.path)).join('/');
+          await encoder.addFile(entity, 'foto/$relative');
+        }
+      }
+      await encoder.close();
+      return zip;
+    }
+
+    late BackupService restoreService;
+    var closed = 0;
+
+    setUp(() {
+      closed = 0;
+      restoreService = BackupService(
+        dbPathProvider: () async => dbFile.path,
+        photoDirProvider: () async => photoDir,
+        closeDatabase: () async => closed++,
+        tempDirProvider: () async => tempDir,
+        dbFactory: databaseFactoryFfiNoIsolate,
+        now: () => DateTime(2026, 7, 25, 14, 30, 5),
+      );
+    });
+
+    test('valid zip replaces DB and photos, closes the connection', () async {
+      // Current state: a DB with "Vecchia" and one stale photo.
+      await writeValidDb(dbFile.path, 'Vecchia');
+      File(p.join(photoDir.path, 'STALE.jpg')).writeAsStringSync('stale');
+      // Backup content: a DB with "Nuova" and a different photo.
+      final sourceDb = p.join(root.path, 'source', DbHelper.dbFileName);
+      Directory(p.dirname(sourceDb)).createSync(recursive: true);
+      await writeValidDb(sourceDb, 'Nuova');
+      final sourcePhotos = Directory(p.join(root.path, 'source_foto'))
+        ..createSync(recursive: true);
+      File(p.join(sourcePhotos.path, 'IMG_9.jpg')).writeAsStringSync('nine');
+      final zip = await zipOf(dbPath: sourceDb, photos: sourcePhotos);
+
+      final result = await restoreService.restoreBackup(zip);
+
+      expect(result.ok, isTrue);
+      expect(closed, 1);
+      expect(File(p.join(photoDir.path, 'IMG_9.jpg')).readAsStringSync(),
+          'nine');
+      expect(File(p.join(photoDir.path, 'STALE.jpg')).existsSync(), isFalse);
+      final helper = DbHelper(
+          factory: databaseFactoryFfiNoIsolate, path: dbFile.path);
+      final rows = await (await helper.database).query('trasferte');
+      expect(rows.single['nome'], 'Nuova');
+      await helper.close();
+      // No leftovers.
+      expect(File('${dbFile.path}.bak').existsSync(), isFalse);
+      expect(Directory('${photoDir.path}_bak').existsSync(), isFalse);
+    });
+
+    test('zip whose DB lacks the expected tables is refused', () async {
+      await writeValidDb(dbFile.path, 'Vecchia');
+      final bogus = File(p.join(root.path, DbHelper.dbFileName));
+      final helper = DbHelper(
+          factory: databaseFactoryFfiNoIsolate, path: bogus.path);
+      final db = await helper.database;
+      await db.execute('DROP TABLE foto');
+      await helper.close();
+      final zip = await zipOf(dbPath: bogus.path);
+
+      final result = await restoreService.restoreBackup(zip);
+
+      expect(result.ok, isFalse);
+      expect(result.error, contains('database valido'));
+      final current = DbHelper(
+          factory: databaseFactoryFfiNoIsolate, path: dbFile.path);
+      final rows = await (await current.database).query('trasferte');
+      expect(rows.single['nome'], 'Vecchia');
+      await current.close();
+    });
+
+    test('corrupt zip is reported, current data intact', () async {
+      await writeValidDb(dbFile.path, 'Vecchia');
+      final corrupt = File(p.join(root.path, 'corrupt.zip'))
+        ..writeAsStringSync('this is not a zip');
+
+      final result = await restoreService.restoreBackup(corrupt);
+
+      expect(result.ok, isFalse);
+      expect(result.error, contains('corrotto'));
+      expect(File(dbFile.path).existsSync(), isTrue);
+    });
+
+    test('zip without nota_spese.db is reported', () async {
+      final zip = File(p.join(root.path, 'no_db.zip'));
+      final encoder = ZipFileEncoder()..create(zip.path);
+      final loose = File(p.join(root.path, 'readme.txt'))
+        ..writeAsStringSync('nothing useful');
+      await encoder.addFile(loose, 'readme.txt');
+      await encoder.close();
+
+      final result = await restoreService.restoreBackup(zip);
+
+      expect(result.ok, isFalse);
+      expect(result.error, contains('nota_spese.db'));
+    });
+
+    test('no temp extraction dir is left behind', () async {
+      final sourceDb = p.join(root.path, 'source2', DbHelper.dbFileName);
+      Directory(p.dirname(sourceDb)).createSync(recursive: true);
+      await writeValidDb(sourceDb, 'Nuova');
+      final zip = await zipOf(dbPath: sourceDb);
+
+      await restoreService.restoreBackup(zip);
+
+      expect(
+          tempDir
+              .listSync()
+              .whereType<Directory>()
+              .where((d) => p.basename(d.path).startsWith('restore_')),
+          isEmpty);
+    });
   });
 }
