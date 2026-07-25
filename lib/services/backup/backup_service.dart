@@ -86,7 +86,12 @@ class BackupService {
           // [NON-BLOCKING] the encoder is being discarded anyway.
         }
       }
-      if (zipFile.existsSync()) await zipFile.delete();
+      try {
+        if (zipFile.existsSync()) await zipFile.delete();
+      } catch (_) {
+        // [NON-BLOCKING] best-effort cleanup: the original failure below is
+        // the one the caller needs, not a secondary delete error.
+      }
       rethrow;
     }
   }
