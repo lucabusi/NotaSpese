@@ -12,6 +12,10 @@ class DbHelper {
   static const int dbVersion = 1;
   static const String dbFileName = 'nota_spese.db';
 
+  /// Tables a valid nota_spese DB must expose. Used by BackupService to
+  /// validate a restored DB before it overwrites the current one.
+  static const Set<String> expectedTables = {'trasferte', 'spese', 'foto'};
+
   final DatabaseFactory? _factory;
   final String? _path;
   Database? _db;
@@ -20,18 +24,33 @@ class DbHelper {
     final cached = _db;
     if (cached != null && cached.isOpen) return cached;
     final factory = _factory ?? databaseFactory;
-    final path = _path ?? join(await factory.getDatabasesPath(), dbFileName);
+    final path = await databasePath();
     final db = await factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
         version: dbVersion,
         onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
         onCreate: _onCreate,
+        onUpgrade: onUpgrade,
       ),
     );
     _db = db;
     return db;
   }
+
+  /// Absolute path of the DB file, resolved like [database] does.
+  /// BackupService zips and swaps this file.
+  Future<String> databasePath() async {
+    final factory = _factory ?? databaseFactory;
+    return _path ?? join(await factory.getDatabasesPath(), dbFileName);
+  }
+
+  /// No-op upgrade hook: v1.0 ships schema v1 with no formal migrations
+  /// (Specifiche.md §7). It exists so a future [dbVersion] bump can't crash
+  /// an existing install with "onUpgrade not implemented" — the per-version
+  /// migration scripts arrive in v1.1.
+  static Future<void> onUpgrade(
+      Database db, int oldVersion, int newVersion) async {}
 
   Future<void> close() async {
     await _db?.close();
