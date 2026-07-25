@@ -21,8 +21,11 @@ class ExportService {
     Future<Directory> Function()? tempDir,
     Future<void> Function(List<XFile>)? share,
     Future<PdfFonts> Function()? loadFonts,
-  })  : _pdf = pdf,
-        _csv = csv,
+  })  :
+    // ignore: prefer_initializing_formals
+    _pdf = pdf,
+    // ignore: prefer_initializing_formals
+    _csv = csv,
         _tempDir = tempDir ?? getTemporaryDirectory,
         _share = share ??
             ((files) => SharePlus.instance.share(ShareParams(files: files))),
