@@ -68,7 +68,7 @@ void main() {
         createdAt: DateTime(2026, 7, 2),
       ),
     ]));
-    // Total is the last row: ListToCsvConverter adds no trailing eol after it.
+    // Total is the last row: CsvEncoder adds no trailing eol after it.
     expect(csv, contains('TOTALE EUR;;;;;10,00;;'));
   });
 

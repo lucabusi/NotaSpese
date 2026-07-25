@@ -55,7 +55,7 @@ class TrasfertaReport {
   final String valutaCategorie;
 
   static TrasfertaReport build(Trasferta trasferta, List<Spesa> spese) {
-    final righe = [...spese]..sort((a, b) {
+    final speseOrdinate = [...spese]..sort((a, b) {
         final byData = a.data.compareTo(b.data);
         return byData != 0 ? byData : a.createdAt.compareTo(b.createdAt);
       });
@@ -98,7 +98,7 @@ class TrasfertaReport {
     return TrasfertaReport(
       trasferta: trasferta,
       righe: [
-        for (final s in righe)
+        for (final s in speseOrdinate)
           ReportRow(
             spesaId: s.id,
             data: s.data,
