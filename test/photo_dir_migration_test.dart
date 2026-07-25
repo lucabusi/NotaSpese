@@ -70,4 +70,32 @@ void main() {
         {'IMG_1.jpg', 'IMG_2.jpg', 'IMG_1_thumb.jpg'});
     expect(to.listSync(recursive: true).whereType<File>(), isEmpty);
   });
+
+  test(
+      'a failing copy aborts: no leftover directories under an existing destination',
+      () async {
+    seed();
+    // A file that sorts after `thumbnails` so it is copied last: every
+    // directory the migration will create (`thumbnails`) is already in
+    // place by the time this one fails, regardless of the exact iteration
+    // order `listSync` happens to return.
+    File(p.join(from.path, 'zzz_blocked.jpg')).writeAsStringSync('blocked');
+    // Destination already exists (unrelated to the migration) and holds a
+    // directory precisely where this last file must be copied, which is
+    // what forces File.copy to throw.
+    Directory(p.join(to.path, 'zzz_blocked.jpg')).createSync(recursive: true);
+
+    final result = await service.migrate(from: from, to: to);
+
+    expect(result.ok, isFalse);
+    // The destination must be left exactly as found: `to` itself and the
+    // pre-existing `zzz_blocked.jpg` directory survive, but no directory
+    // created by the migration (e.g. `thumbnails`) is left behind.
+    expect(to.existsSync(), isTrue);
+    expect(Directory(p.join(to.path, 'zzz_blocked.jpg')).existsSync(), isTrue);
+    expect(Directory(p.join(to.path, 'thumbnails')).existsSync(), isFalse);
+    expect(
+        to.listSync(recursive: true).map((e) => p.basename(e.path)).toSet(),
+        {'zzz_blocked.jpg'});
+  });
 }
