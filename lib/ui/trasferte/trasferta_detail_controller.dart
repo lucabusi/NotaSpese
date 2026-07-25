@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 
 import '../../core/constants/categories.dart';
@@ -95,6 +97,21 @@ class TrasfertaDetailController extends ChangeNotifier {
   /// For the form/viewer path resolver (PhotoService stays private).
   Future<String> absolutePhotoPath(String relative) =>
       _photoService.absolutePath(relative);
+
+  /// Full-size receipt photo bytes keyed by spesa id, for PDF export.
+  /// Best-effort: a spesa whose photo file is missing/unreadable is skipped.
+  Future<Map<int, Uint8List>> fotoBytesBySpesa() async {
+    final result = <int, Uint8List>{};
+    for (final entry in fotoBySpesa.entries) {
+      try {
+        final abs = await _photoService.absolutePath(entry.value.filePath);
+        result[entry.key] = await File(abs).readAsBytes();
+      } catch (_) {
+        // Skip: the PDF simply omits this receipt's photo page.
+      }
+    }
+    return result;
+  }
 
   Future<void> _attachFoto(int spesaId, String sourcePath) async {
     final paths = await _photoService.process(sourcePath);

@@ -172,6 +172,30 @@ void main() {
         File(p.join(baseDir.path, foto3.thumbPath)).existsSync(), isFalse);
   });
 
+  test('fotoBytesBySpesa returns bytes keyed by spesa id', () async {
+    final c = controller();
+    await c.load();
+    final source = await writeSourceImage();
+    await c.createSpesa(
+      Spesa(
+        trasfertaId: trasfertaId,
+        data: DateTime(2026, 7, 2),
+        categoria: Categoria.pranzo,
+        importo: 10,
+        valuta: 'EUR',
+        createdAt: DateTime(2026, 7, 2),
+      ),
+      fotoSourcePath: source,
+    );
+    final spesaId = c.fotoBySpesa.keys.single;
+
+    final bytes = await c.fotoBytesBySpesa();
+
+    expect(bytes.keys, contains(spesaId));
+    expect(bytes[spesaId], isNotEmpty);
+    c.dispose();
+  });
+
   test('setArchiviata and elimina act on the trip', () async {
     final c = controller();
     await c.load();
