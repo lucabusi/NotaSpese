@@ -102,9 +102,10 @@ void main() {
   test('a destination created by the migration is fully removed on abort',
       () async {
     seed();
-    // Sorts after `thumbnails`, so whatever order `listSync` returns, this
-    // file's copy is attempted only after `thumbnails` has already been
-    // created — exercising cleanup of both `to` and `to/thumbnails`.
+    // `zzz_blocked.jpg` is a lone top-level source: whichever order
+    // `listSync` returns the (only) files in, `to` must be created before
+    // this one's copy is attempted, since its target's parent *is* `to`
+    // itself — so this case is robust in every ordering.
     File(p.join(from.path, 'zzz_blocked.jpg')).writeAsStringSync('blocked');
     expect(to.existsSync(), isFalse);
 
@@ -122,9 +123,9 @@ void main() {
     final result = await future;
 
     expect(result.ok, isFalse);
-    // `to` did not exist before the migration and must not exist after an
-    // abort, even though the migration necessarily created it (and
-    // `to/thumbnails`) while copying.
+    // `to` did not exist before the migration; its own creation is what
+    // `zzz_blocked.jpg`'s copy needs (its target's parent is `to` itself),
+    // so `to` is created in every ordering and must not exist after abort.
     expect(to.existsSync(), isFalse);
     // The other sources were never touched by the migration (the
     // post-copy delete phase never runs after an abort).
@@ -136,18 +137,23 @@ void main() {
   });
 
   test('a pre-existing empty destination survives the abort', () async {
-    seed();
-    File(p.join(from.path, 'zzz_blocked.jpg')).writeAsStringSync('blocked');
+    // A single nested source — no top-level file at all — removes the
+    // ordering variable entirely: there is only one file to process, so
+    // `to/thumbnails` is unconditionally created for it before its copy is
+    // attempted, whatever `listSync` (documented as unspecified order)
+    // returns.
+    Directory(p.join(from.path, 'thumbnails')).createSync(recursive: true);
+    File(p.join(from.path, 'thumbnails', 'IMG_1_thumb.jpg'))
+        .writeAsStringSync('thumb-1');
     to.createSync(recursive: true);
 
     final future = service.migrate(from: from, to: to);
-    File(p.join(from.path, 'zzz_blocked.jpg')).deleteSync();
+    File(p.join(from.path, 'thumbnails', 'IMG_1_thumb.jpg')).deleteSync();
     final result = await future;
 
     expect(result.ok, isFalse);
     // `to` pre-existed (empty) and must survive, but end up empty again:
-    // nothing the migration created inside it (`thumbnails`) or copied into
-    // it is left behind.
+    // `to/thumbnails`, which the migration created, is not left behind.
     expect(to.existsSync(), isTrue);
     expect(to.listSync(recursive: true), isEmpty);
   });
