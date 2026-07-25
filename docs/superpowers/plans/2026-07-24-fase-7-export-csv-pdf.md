@@ -375,7 +375,8 @@ void main() {
         createdAt: DateTime(2026, 7, 2),
       ),
     ]));
-    expect(csv, contains('TOTALE EUR;;;;;10,00;;\r\n'));
+    // Total is the last row: ListToCsvConverter adds no trailing eol after it.
+    expect(csv, contains('TOTALE EUR;;;;;10,00;;'));
   });
 
   test('total row notes excluded expenses when some are unconverted', () {
