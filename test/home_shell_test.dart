@@ -29,21 +29,17 @@ import 'fakes/fake_exchange_service.dart';
 /// three methods instead of touching the platform channel.
 class _FakeApiKeyStore extends ApiKeyStore {
   String? _value;
-  String? written;
-  bool deleted = false;
 
   @override
   Future<String?> read() async => _value;
 
   @override
   Future<void> write(String value) async {
-    written = value;
     _value = value;
   }
 
   @override
   Future<void> delete() async {
-    deleted = true;
     _value = null;
   }
 }
@@ -60,9 +56,13 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     // No-isolate factory: see trasferta_detail_screen_test.dart.
     dbHelper = DbHelper(
-        factory: databaseFactoryFfiNoIsolate, path: inMemoryDatabasePath);
-    fotoRepo = FotoRepository(dbHelper,
-        basePathProvider: () async => Directory.systemTemp.path);
+      factory: databaseFactoryFfiNoIsolate,
+      path: inMemoryDatabasePath,
+    );
+    fotoRepo = FotoRepository(
+      dbHelper,
+      basePathProvider: () async => Directory.systemTemp.path,
+    );
     trasfertaRepo = TrasfertaRepository(dbHelper, fotoRepo);
     spesaRepo = SpesaRepository(dbHelper, fotoRepo);
   });
@@ -74,32 +74,38 @@ void main() {
     ApiKeyStore? apiKeyStore,
     SettingsService? settingsService,
   }) async {
-    await tester.pumpWidget(MaterialApp(
-      home: HomeShell(
-        trasfertaRepository: trasfertaRepo,
-        spesaRepository: spesaRepo,
-        fotoRepository: fotoRepo,
-        photoService: PhotoService(SettingsService(),
-            basePathProvider: () async => Directory.systemTemp.path),
-        captureService: ReceiptCaptureService(),
-        orchestrator: RecognitionOrchestrator(
-          mlkitOcr: MlkitOcrService(),
-          claudeOcr: ClaudeOcrService(apiKeyProvider: () async => null),
-          parser: ReceiptParser(),
-          apiKeyProvider: () async => null,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HomeShell(
+          trasfertaRepository: trasfertaRepo,
+          spesaRepository: spesaRepo,
+          fotoRepository: fotoRepo,
+          photoService: PhotoService(
+            SettingsService(),
+            basePathProvider: () async => Directory.systemTemp.path,
+          ),
+          captureService: ReceiptCaptureService(),
+          orchestrator: RecognitionOrchestrator(
+            mlkitOcr: MlkitOcrService(),
+            claudeOcr: ClaudeOcrService(apiKeyProvider: () async => null),
+            parser: ReceiptParser(),
+            apiKeyProvider: () async => null,
+          ),
+          settingsService: settingsService ?? SettingsService(),
+          apiKeyStore: apiKeyStore ?? _FakeApiKeyStore(),
+          exchangeService: FakeExchangeService(),
+          cropService: CropService(
+            tempDirProvider: () async => Directory.systemTemp.path,
+          ),
         ),
-        settingsService: settingsService ?? SettingsService(),
-        apiKeyStore: apiKeyStore ?? _FakeApiKeyStore(),
-        exchangeService: FakeExchangeService(),
-        cropService: CropService(
-            tempDirProvider: () async => Directory.systemTemp.path),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
   }
 
-  testWidgets('shows three destinations and starts on Trasferte',
-      (tester) async {
+  testWidgets('shows three destinations and starts on Trasferte', (
+    tester,
+  ) async {
     await pump(tester);
 
     expect(find.byType(NavigationBar), findsOneWidget);
@@ -110,12 +116,14 @@ void main() {
   });
 
   testWidgets('switching to Archivio shows archived list', (tester) async {
-    await trasfertaRepo.insert(Trasferta(
-      nome: 'Old',
-      dataInizio: DateTime(2026, 5, 1),
-      archiviata: true,
-      createdAt: DateTime(2026, 5, 1),
-    ));
+    await trasfertaRepo.insert(
+      Trasferta(
+        nome: 'Old',
+        dataInizio: DateTime(2026, 5, 1),
+        archiviata: true,
+        createdAt: DateTime(2026, 5, 1),
+      ),
+    );
     await pump(tester);
 
     await tester.tap(find.text('Archivio'));
@@ -132,6 +140,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(ImpostazioniScreen), findsOneWidget);
+    // Scroll settings ListView to render version footer (pushed down by rates toggle card).
     await tester.dragUntilVisible(
       find.textContaining(appVersion),
       find.byType(Scrollable).last,

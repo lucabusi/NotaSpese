@@ -6,9 +6,18 @@ import '../../services/settings/settings_service.dart';
 import '../../version.dart';
 
 /// Full settings screen (fase 8), replacing ImpostazioniMinimal: OCR engine +
-/// Claude API key, photo options, exchange rates, backup/restore, version.
+/// Claude API key, exchange rates, version. Photo options (Task 7) and
+/// backup/restore (Task 8) are pending — not implemented yet, grafted onto
+/// this screen in the next two tasks.
 /// Services do the work and return results; every dialog and SnackBar lives
 /// here.
+///
+/// The OCR section below consolidates what used to be two separate cards in
+/// ImpostazioniMinimal ("Claude API key" + "Motore OCR predefinito") into one
+/// "OCR" card, and relabels the API key field "Chiave API Claude Vision".
+/// This is an intentional deviation from the "pure move" framing of Task 6 —
+/// confirmed by the user on 2026-07-27 — not a leftover to reconcile. Do not
+/// "restore" the old two-card layout.
 class ImpostazioniScreen extends StatefulWidget {
   const ImpostazioniScreen({
     super.key,
@@ -63,8 +72,9 @@ class _ImpostazioniScreenState extends State<ImpostazioniScreen> {
     _apiKeyController.clear();
     if (!mounted) return;
     setState(() => _configured = true);
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('Chiave API salvata.')));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Chiave API salvata.')));
   }
 
   Future<void> _rimuoviApiKey() async {
@@ -127,7 +137,9 @@ class _ImpostazioniScreenState extends State<ImpostazioniScreen> {
               key: const Key('motore-default'),
               segments: [
                 const ButtonSegment(
-                    value: OcrEngine.mlkit, label: Text('ML Kit')),
+                  value: OcrEngine.mlkit,
+                  label: Text('ML Kit'),
+                ),
                 ButtonSegment(
                   value: OcrEngine.claude,
                   label: const Text('Claude'),
@@ -142,8 +154,9 @@ class _ImpostazioniScreenState extends State<ImpostazioniScreen> {
               key: const Key('campo-api-key'),
               controller: _apiKeyController,
               obscureText: true,
-              decoration:
-                  const InputDecoration(labelText: 'Chiave API Claude Vision'),
+              decoration: const InputDecoration(
+                labelText: 'Chiave API Claude Vision',
+              ),
             ),
             const SizedBox(height: 8),
             Text(_configured ? 'Configurata' : 'Non configurata'),
@@ -177,7 +190,8 @@ class _ImpostazioniScreenState extends State<ImpostazioniScreen> {
         key: const Key('toggle-tassi-online'),
         title: const Text('Tassi di cambio online'),
         subtitle: const Text(
-            'Conversione EUR automatica via frankfurter.app (tasso del giorno della spesa)'),
+          'Conversione EUR automatica via frankfurter.app (tasso del giorno della spesa)',
+        ),
         value: _tassiOnline,
         onChanged: _onTassiOnlineChanged,
       ),

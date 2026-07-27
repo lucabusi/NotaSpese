@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../data/repositories/foto_repository.dart';
@@ -51,11 +51,17 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   int _index = 0;
   late final TrasferteListController _attiveController =
-      TrasferteListController(widget.trasfertaRepository, widget.spesaRepository,
-          archiviate: false);
+      TrasferteListController(
+        widget.trasfertaRepository,
+        widget.spesaRepository,
+        archiviate: false,
+      );
   late final TrasferteListController _archivioController =
-      TrasferteListController(widget.trasfertaRepository, widget.spesaRepository,
-          archiviate: true);
+      TrasferteListController(
+        widget.trasfertaRepository,
+        widget.spesaRepository,
+        archiviate: true,
+      );
 
   @override
   void dispose() {
@@ -111,13 +117,16 @@ class _HomeShellState extends State<HomeShell> {
         onDestinationSelected: _onDestinationSelected,
         destinations: const [
           NavigationDestination(
-              icon: Icon(Symbols.receipt_long), label: 'Trasferte'),
+            icon: Icon(Symbols.receipt_long),
+            label: 'Trasferte',
+          ),
           NavigationDestination(icon: Icon(Symbols.archive), label: 'Archivio'),
           NavigationDestination(
-              icon: Icon(Symbols.settings), label: 'Impostazioni'),
+            icon: Icon(Symbols.settings),
+            label: 'Impostazioni',
+          ),
         ],
       ),
     );
   }
 }
-

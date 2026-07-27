@@ -40,12 +40,14 @@ void main() {
     ApiKeyStore? apiKeyStore,
     SettingsService? settingsService,
   }) async {
-    await tester.pumpWidget(MaterialApp(
-      home: ImpostazioniScreen(
-        apiKeyStore: apiKeyStore ?? _FakeApiKeyStore(),
-        settingsService: settingsService ?? SettingsService(),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ImpostazioniScreen(
+          apiKeyStore: apiKeyStore ?? _FakeApiKeyStore(),
+          settingsService: settingsService ?? SettingsService(),
+        ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
   }
 
@@ -56,6 +58,7 @@ void main() {
     expect(find.byKey(const Key('campo-api-key')), findsOneWidget);
     expect(find.byKey(const Key('motore-default')), findsOneWidget);
     expect(find.byKey(const Key('toggle-tassi-online')), findsOneWidget);
+    // Scroll settings ListView to render version footer (pushed down by rates toggle card).
     await tester.dragUntilVisible(
       find.textContaining(appVersion),
       find.byType(Scrollable).last,
@@ -65,39 +68,66 @@ void main() {
   });
 
   group('Claude API key', () {
-    testWidgets('initial state is non configurata, no Rimuovi button',
-        (tester) async {
+    testWidgets('initial state is non configurata, no Rimuovi button', (
+      tester,
+    ) async {
       await pump(tester, apiKeyStore: _FakeApiKeyStore());
 
       expect(find.text('Non configurata'), findsOneWidget);
+      expect(find.text('Configurata'), findsNothing);
       expect(find.byKey(const Key('rimuovi-api-key')), findsNothing);
     });
 
-    testWidgets('saving writes the value, shows configurata, clears field',
-        (tester) async {
+    testWidgets('saving writes the value, shows configurata, clears field', (
+      tester,
+    ) async {
       final store = _FakeApiKeyStore();
       await pump(tester, apiKeyStore: store);
 
       await tester.enterText(
-          find.byKey(const Key('campo-api-key')), 'sk-segreta-123');
+        find.byKey(const Key('campo-api-key')),
+        'sk-segreta-123',
+      );
       await tester.tap(find.byKey(const Key('salva-api-key')));
       await tester.pumpAndSettle();
 
       expect(store.written, 'sk-segreta-123');
       expect(find.text('Configurata'), findsOneWidget);
-      final field =
-          tester.widget<TextField>(find.byKey(const Key('campo-api-key')));
+      expect(find.byKey(const Key('rimuovi-api-key')), findsOneWidget);
+      final field = tester.widget<TextField>(
+        find.byKey(const Key('campo-api-key')),
+      );
       expect(field.controller!.text, isEmpty);
       expect(find.textContaining('sk-segreta-123'), findsNothing);
     });
 
-    testWidgets('removing the key reverts a claude default to mlkit',
-        (tester) async {
+    testWidgets('removing calls delete and reverts to non configurata', (
+      tester,
+    ) async {
+      final store = _FakeApiKeyStore('sk-esistente');
+      await pump(tester, apiKeyStore: store);
+
+      expect(find.text('Configurata'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('rimuovi-api-key')));
+      await tester.pumpAndSettle();
+
+      expect(store.deleted, isTrue);
+      expect(find.text('Non configurata'), findsOneWidget);
+      expect(find.byKey(const Key('rimuovi-api-key')), findsNothing);
+    });
+
+    testWidgets('removing the key reverts a claude default to mlkit', (
+      tester,
+    ) async {
       final settingsService = SettingsService();
       await settingsService.setOcrEngineDefault(OcrEngine.claude);
       final store = _FakeApiKeyStore('sk-esistente');
-      await pump(tester,
-          apiKeyStore: store, settingsService: settingsService);
+      await pump(tester, apiKeyStore: store, settingsService: settingsService);
+
+      final before = tester.widget<SegmentedButton<OcrEngine>>(
+        find.byKey(const Key('motore-default')),
+      );
+      expect(before.selected, {OcrEngine.claude});
 
       await tester.tap(find.byKey(const Key('rimuovi-api-key')));
       await tester.pumpAndSettle();
@@ -105,6 +135,11 @@ void main() {
       expect(store.deleted, isTrue);
       expect(await settingsService.ocrEngineDefault, OcrEngine.mlkit);
       expect(find.text('Non configurata'), findsOneWidget);
+      expect(find.byKey(const Key('rimuovi-api-key')), findsNothing);
+      final after = tester.widget<SegmentedButton<OcrEngine>>(
+        find.byKey(const Key('motore-default')),
+      );
+      expect(after.selected, {OcrEngine.mlkit});
     });
   });
 
@@ -113,23 +148,35 @@ void main() {
       await pump(tester, apiKeyStore: _FakeApiKeyStore());
 
       final button = tester.widget<SegmentedButton<OcrEngine>>(
-          find.byKey(const Key('motore-default')));
-      expect(button.segments.firstWhere((s) => s.value == OcrEngine.claude)
-          .enabled, isFalse);
+        find.byKey(const Key('motore-default')),
+      );
+      expect(
+        button.segments.firstWhere((s) => s.value == OcrEngine.claude).enabled,
+        isFalse,
+      );
     });
 
     testWidgets('selecting Claude persists the default', (tester) async {
       final settingsService = SettingsService();
-      await pump(tester,
-          apiKeyStore: _FakeApiKeyStore('sk-esistente'),
-          settingsService: settingsService);
+      await pump(
+        tester,
+        apiKeyStore: _FakeApiKeyStore('sk-esistente'),
+        settingsService: settingsService,
+      );
 
-      await tester.tap(find.descendant(
+      await tester.tap(
+        find.descendant(
           of: find.byKey(const Key('motore-default')),
-          matching: find.text('Claude')));
+          matching: find.text('Claude'),
+        ),
+      );
       await tester.pumpAndSettle();
 
       expect(await settingsService.ocrEngineDefault, OcrEngine.claude);
+      final button = tester.widget<SegmentedButton<OcrEngine>>(
+        find.byKey(const Key('motore-default')),
+      );
+      expect(button.selected, {OcrEngine.claude});
     });
   });
 
