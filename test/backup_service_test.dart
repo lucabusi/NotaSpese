@@ -212,6 +212,148 @@ void main() {
       expect(result.error, contains('nota_spese.db'));
     });
 
+    test('a failed swap rolls the previous DB back', () async {
+      // A photo dir that can never be created: one of its path components is
+      // a regular file, so _moveDirectory blows up *after* the DB has been
+      // parked and the new one moved in — exactly the half-swap _rollback
+      // exists for.
+      final blocker = File(p.join(root.path, 'blocker.txt'))
+        ..writeAsStringSync('not a directory');
+      final unusablePhotos = Directory(p.join(blocker.path, 'foto'));
+      final breaking = BackupService(
+        dbPathProvider: () async => dbFile.path,
+        photoDirProvider: () async => unusablePhotos,
+        closeDatabase: () async => closed++,
+        tempDirProvider: () async => tempDir,
+        dbFactory: databaseFactoryFfiNoIsolate,
+        now: () => DateTime(2026, 7, 25, 14, 30, 5),
+      );
+      await writeValidDb(dbFile.path, 'Vecchia');
+      final sourceDb = p.join(root.path, 'source_rb', DbHelper.dbFileName);
+      Directory(p.dirname(sourceDb)).createSync(recursive: true);
+      await writeValidDb(sourceDb, 'Nuova');
+      final sourcePhotos = Directory(p.join(root.path, 'source_rb_foto'))
+        ..createSync(recursive: true);
+      File(p.join(sourcePhotos.path, 'IMG_7.jpg')).writeAsStringSync('seven');
+      final zip = await zipOf(dbPath: sourceDb, photos: sourcePhotos);
+
+      final result = await breaking.restoreBackup(zip);
+
+      expect(result.ok, isFalse);
+      expect(result.error, contains('dati precedenti'));
+      // The previous DB is back where it belongs, not parked as .bak.
+      expect(File('${dbFile.path}.bak').existsSync(), isFalse);
+      final helper =
+          DbHelper(factory: databaseFactoryFfiNoIsolate, path: dbFile.path);
+      final rows = await (await helper.database).query('trasferte');
+      expect(rows.single['nome'], 'Vecchia');
+      await helper.close();
+    });
+
+    test('a pre-existing .bak from an earlier failure is not destroyed',
+        () async {
+      await writeValidDb(dbFile.path, 'Vecchia');
+      // Leftovers of a previous, failed restore: the only hand-recoverable
+      // copy of the data. A second attempt must not wipe them.
+      final oldBak = File('${dbFile.path}.bak')
+        ..writeAsStringSync('previous-recovery-copy');
+      final oldPhotoBak = Directory('${photoDir.path}_bak')
+        ..createSync(recursive: true);
+      File(p.join(oldPhotoBak.path, 'OLD.jpg')).writeAsStringSync('old');
+
+      final sourceDb = p.join(root.path, 'source_keepbak', DbHelper.dbFileName);
+      Directory(p.dirname(sourceDb)).createSync(recursive: true);
+      await writeValidDb(sourceDb, 'Nuova');
+      final zip = await zipOf(dbPath: sourceDb);
+
+      final result = await restoreService.restoreBackup(zip);
+
+      expect(result.ok, isTrue);
+      expect(oldBak.readAsStringSync(), 'previous-recovery-copy');
+      expect(File(p.join(oldPhotoBak.path, 'OLD.jpg')).readAsStringSync(),
+          'old');
+      // The copies parked by *this* restore are cleaned up.
+      expect(File('${dbFile.path}.bak2').existsSync(), isFalse);
+      expect(Directory('${photoDir.path}_bak2').existsSync(), isFalse);
+    });
+
+    test('an unexpected failure comes back as a RestoreResult, not a throw',
+        () async {
+      final exploding = BackupService(
+        dbPathProvider: () async => dbFile.path,
+        photoDirProvider: () async => photoDir,
+        closeDatabase: () async => throw StateError('cannot close'),
+        tempDirProvider: () async => tempDir,
+        dbFactory: databaseFactoryFfiNoIsolate,
+        now: () => DateTime(2026, 7, 25, 14, 30, 5),
+      );
+      final sourceDb = p.join(root.path, 'source_boom', DbHelper.dbFileName);
+      Directory(p.dirname(sourceDb)).createSync(recursive: true);
+      await writeValidDb(sourceDb, 'Nuova');
+      final zip = await zipOf(dbPath: sourceDb);
+
+      final result = await exploding.restoreBackup(zip);
+
+      expect(result.ok, isFalse);
+      expect(result.error, contains('Ripristino non riuscito'));
+    });
+
+    test('leftovers of a same-clock temp dir do not leak into the restore',
+        () async {
+      // The clock is fixed, so a millisecond-named temp dir is not unique:
+      // a previous run's extraction must not be picked up as this one's.
+      final stale = Directory(p.join(
+          tempDir.path,
+          'restore_'
+          '${DateTime(2026, 7, 25, 14, 30, 5).millisecondsSinceEpoch}'));
+      Directory(p.join(stale.path, 'foto')).createSync(recursive: true);
+      File(p.join(stale.path, 'foto', 'GHOST.jpg')).writeAsStringSync('ghost');
+
+      final sourceDb = p.join(root.path, 'source_clock', DbHelper.dbFileName);
+      Directory(p.dirname(sourceDb)).createSync(recursive: true);
+      await writeValidDb(sourceDb, 'Nuova');
+      final sourcePhotos = Directory(p.join(root.path, 'source_clock_foto'))
+        ..createSync(recursive: true);
+      File(p.join(sourcePhotos.path, 'IMG_3.jpg')).writeAsStringSync('three');
+      final zip = await zipOf(dbPath: sourceDb, photos: sourcePhotos);
+
+      final result = await restoreService.restoreBackup(zip);
+
+      expect(result.ok, isTrue);
+      expect(File(p.join(photoDir.path, 'IMG_3.jpg')).existsSync(), isTrue);
+      expect(File(p.join(photoDir.path, 'GHOST.jpg')).existsSync(), isFalse);
+    });
+
+    test('a cleanup failure after a completed swap still reports success',
+        () async {
+      // Read-only attribute: renaming the current DB to .bak still works, but
+      // deleting that .bak afterwards fails with access denied — a cleanup
+      // error on an already-successful swap.
+      await writeValidDb(dbFile.path, 'Vecchia');
+      Process.runSync('attrib', ['+R', dbFile.path]);
+      final sourceDb = p.join(root.path, 'source_ro', DbHelper.dbFileName);
+      Directory(p.dirname(sourceDb)).createSync(recursive: true);
+      await writeValidDb(sourceDb, 'Nuova');
+      final zip = await zipOf(dbPath: sourceDb);
+
+      final result = await restoreService.restoreBackup(zip);
+
+      final leftover = File('${dbFile.path}.bak');
+      if (leftover.existsSync()) {
+        Process.runSync('attrib', ['-R', leftover.path]);
+      }
+      expect(result.ok, isTrue);
+      final helper =
+          DbHelper(factory: databaseFactoryFfiNoIsolate, path: dbFile.path);
+      final rows = await (await helper.database).query('trasferte');
+      expect(rows.single['nome'], 'Nuova');
+      await helper.close();
+    },
+        skip: Platform.isWindows
+            ? null
+            : 'needs the Windows read-only attribute to block a delete '
+                'without blocking the preceding rename');
+
     test('no temp extraction dir is left behind', () async {
       final sourceDb = p.join(root.path, 'source2', DbHelper.dbFileName);
       Directory(p.dirname(sourceDb)).createSync(recursive: true);
