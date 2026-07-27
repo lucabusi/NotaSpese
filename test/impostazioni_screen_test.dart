@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 // XFile comes from file_selector (a direct dependency): importing
 // cross_file directly would trip depend_on_referenced_packages.
@@ -100,6 +101,17 @@ class _FakeBackupService extends BackupService {
   }
 }
 
+/// Completes only when the test says so, to inspect the screen mid-backup.
+class _ControlledBackupService extends _FakeBackupService {
+  final completer = Completer<File>();
+
+  @override
+  Future<File> createBackup() {
+    createCalls++;
+    return completer.future;
+  }
+}
+
 /// The settings ListView specifically: a bare `find.byType(ListView)` is unique
 /// only while nothing else on screen is a list, and `find.byType(Scrollable)
 /// .last` is the API key TextField's own horizontal scrollable.
@@ -144,6 +156,7 @@ void main() {
     Future<Directory> Function(PhotoDirKind)? photoDirFor,
     BackupService? backupService,
     Future<XFile?> Function()? pickZip,
+    Future<void> Function(XFile)? shareFile,
     List<XFile>? shared,
   }) async {
     await tester.pumpWidget(
@@ -158,7 +171,7 @@ void main() {
           migrationService: migrationService,
           backupService: backupService ?? _FakeBackupService(),
           pickZip: pickZip ?? () async => null,
-          shareFile: (file) async => shared?.add(file),
+          shareFile: shareFile ?? (file) async => shared?.add(file),
         ),
       ),
     );
@@ -680,6 +693,218 @@ void main() {
 
       expect(find.text('Archivio non leggibile.'), findsOneWidget);
       expect(find.byKey(const Key('dialog-riavvia')), findsNothing);
+    });
+
+    testWidgets('a throwing picker leaves the whole screen usable', (
+      tester,
+    ) async {
+      // openFile is a platform channel: PlatformException on SAF/activity
+      // errors, MissingPluginException when the plugin is missing. The
+      // re-entrancy guard raises _backupRunning *before* that await, so an
+      // unguarded throw stranded it at true — and the screen lives in
+      // HomeShell's IndexedStack, whose State is never recreated, so both
+      // backup buttons, the photo dir selector and the refresh button stayed
+      // dead for the rest of the session, without even a SnackBar.
+      await pump(
+        tester,
+        pickZip: () async =>
+            throw PlatformException(code: 'channel-error', message: 'no SAF'),
+      );
+
+      final restore = find.byKey(const Key('ripristina-backup'));
+      await tester.dragUntilVisible(
+        restore,
+        settingsList,
+        const Offset(0, -100),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(restore);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Ripristino non riuscito.'), findsOneWidget);
+      expect(
+        tester.widget<OutlinedButton>(restore).onPressed,
+        isNotNull,
+      );
+      expect(
+        tester
+            .widget<ElevatedButton>(find.byKey(const Key('backup-ora')))
+            .onPressed,
+        isNotNull,
+      );
+
+      // The photo controls sit above the Backup card: scroll back up.
+      final selector = find.byKey(const Key('selettore-dir-foto'));
+      await tester.dragUntilVisible(
+        selector,
+        settingsList,
+        const Offset(0, 100),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<SegmentedButton<PhotoDirKind>>(selector)
+            .onSelectionChanged,
+        isNotNull,
+      );
+      expect(
+        tester
+            .widget<IconButton>(find.byKey(const Key('refresh-spazio')))
+            .onPressed,
+        isNotNull,
+      );
+    });
+
+    testWidgets('backup and restore are locked while a migration runs', (
+      tester,
+    ) async {
+      // Not cosmetic: createBackup lists the photo dir recursively and then
+      // adds one file at a time, so a concurrent copy-then-delete migration
+      // deletes a file between the listing and its addFile and aborts the zip.
+      final migrationService = _ControlledMigrationService();
+      await pump(tester, migrationService: migrationService);
+
+      final selector = find.byKey(const Key('selettore-dir-foto'));
+      await tester.ensureVisible(selector);
+      await tester.tap(
+        find.descendant(of: selector, matching: find.text('Esterna')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('conferma-migrazione')));
+      await tester.pumpAndSettle();
+
+      final backup = find.byKey(const Key('backup-ora'));
+      final restore = find.byKey(const Key('ripristina-backup'));
+      await tester.dragUntilVisible(
+        backup,
+        settingsList,
+        const Offset(0, -100),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.widget<ElevatedButton>(backup).onPressed, isNull);
+      expect(tester.widget<OutlinedButton>(restore).onPressed, isNull);
+
+      migrationService.completer.complete(const MigrationResult.success(2));
+      await tester.pumpAndSettle();
+
+      expect(tester.widget<ElevatedButton>(backup).onPressed, isNotNull);
+      expect(tester.widget<OutlinedButton>(restore).onPressed, isNotNull);
+    });
+
+    testWidgets('the photo dir is locked while a restore runs', (tester) async {
+      // The mirror of the case above: _swapIn renames the whole photo dir, so
+      // a migration started mid-restore would copy into a tree that is about
+      // to be parked as _bak. The picker await is part of the guarded span.
+      final picker = Completer<XFile?>();
+      await pump(tester, pickZip: () => picker.future);
+
+      final restore = find.byKey(const Key('ripristina-backup'));
+      await tester.dragUntilVisible(
+        restore,
+        settingsList,
+        const Offset(0, -100),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(restore);
+      await tester.pumpAndSettle();
+
+      final selector = find.byKey(const Key('selettore-dir-foto'));
+      await tester.dragUntilVisible(
+        selector,
+        settingsList,
+        const Offset(0, 100),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<SegmentedButton<PhotoDirKind>>(selector)
+            .onSelectionChanged,
+        isNull,
+      );
+      expect(
+        tester
+            .widget<IconButton>(find.byKey(const Key('refresh-spazio')))
+            .onPressed,
+        isNull,
+      );
+
+      picker.complete(null);
+      await tester.pumpAndSettle();
+
+      expect(
+        tester
+            .widget<SegmentedButton<PhotoDirKind>>(selector)
+            .onSelectionChanged,
+        isNotNull,
+      );
+      expect(
+        tester
+            .widget<IconButton>(find.byKey(const Key('refresh-spazio')))
+            .onPressed,
+        isNotNull,
+      );
+    });
+
+    testWidgets('the progress bar runs only while the backup itself does', (
+      tester,
+    ) async {
+      final service = _ControlledBackupService();
+      await pump(tester, backupService: service);
+
+      final backup = find.byKey(const Key('backup-ora'));
+      await tester.dragUntilVisible(
+        backup,
+        settingsList,
+        const Offset(0, -100),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(LinearProgressIndicator), findsNothing);
+
+      await tester.tap(backup);
+      // pump, never pumpAndSettle: an indeterminate progress indicator
+      // animates forever and would hang it (that is the whole reason the bar
+      // hangs off _backupWorking and not off the wider _backupRunning).
+      await tester.pump();
+      expect(find.byType(LinearProgressIndicator), findsOneWidget);
+
+      service.completer.complete(
+        File(p.join(root.path, 'done.zip'))..writeAsStringSync('zip-bytes'),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(LinearProgressIndicator), findsNothing);
+      expect(service.createCalls, 1);
+    });
+
+    testWidgets('a failing share does not claim the backup failed', (
+      tester,
+    ) async {
+      // The zip exists at that point: "Backup non riuscito." would send the
+      // user retrying a backup that already succeeded.
+      final zip = File(p.join(root.path, 'shared.zip'))
+        ..writeAsStringSync('zip-bytes');
+      await pump(
+        tester,
+        backupService: _FakeBackupService(zip: zip),
+        shareFile: (_) async =>
+            throw PlatformException(code: 'no-activity-found'),
+      );
+
+      final backup = find.byKey(const Key('backup-ora'));
+      await tester.dragUntilVisible(
+        backup,
+        settingsList,
+        const Offset(0, -100),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(backup);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Backup creato ma condivisione non riuscita.'),
+        findsOneWidget,
+      );
+      expect(find.text('Backup non riuscito.'), findsNothing);
     });
   });
 }

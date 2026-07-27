@@ -51,12 +51,26 @@ class ImpostazioniScreen extends StatefulWidget {
   final Future<XFile?> Function() pickZip;
   final Future<void> Function(XFile) shareFile;
 
+  /// The extra MIME types are not redundant. `extensions: ['zip']` resolves to
+  /// `application/zip` too, so with that alone file_selector_android ends up
+  /// with a single type and calls `intent.setType("application/zip")` on
+  /// ACTION_OPEN_DOCUMENT — a strict filter with no EXTRA_MIME_TYPES widening.
+  /// A zip that left the app through the share sheet and came back via
+  /// Drive/Downloads is often typed `application/octet-stream` or
+  /// `application/x-zip-compressed`, and would show up greyed out and
+  /// unselectable. More than one type flips the plugin to
+  /// `setType("*/*") + EXTRA_MIME_TYPES`, which lists them all.
   static Future<XFile?> _pickZipFile() => openFile(
         acceptedTypeGroups: const [
           XTypeGroup(
-              label: 'Backup zip',
-              extensions: ['zip'],
-              mimeTypes: ['application/zip']),
+            label: 'Backup zip',
+            extensions: ['zip'],
+            mimeTypes: [
+              'application/zip',
+              'application/x-zip-compressed',
+              'application/octet-stream',
+            ],
+          ),
         ],
       );
 
@@ -275,12 +289,31 @@ class _ImpostazioniScreenState extends State<ImpostazioniScreen> {
       _backupWorking = true;
     });
     try {
-      final zip = await widget.backupService.createBackup();
-      await widget.shareFile(XFile(zip.path));
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Backup non riuscito.')));
+      final File zip;
+      try {
+        zip = await widget.backupService.createBackup();
+      } on Exception catch (e) {
+        debugPrint('[NON-BLOCKING] createBackup failed: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Backup non riuscito.')),
+          );
+        }
+        return;
+      }
+      try {
+        await widget.shareFile(XFile(zip.path));
+      } on Exception catch (e) {
+        // The zip does exist at this point: "Backup non riuscito." would send
+        // the user retrying a backup that already succeeded.
+        debugPrint('[NON-BLOCKING] share failed: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Backup creato ma condivisione non riuscita.'),
+            ),
+          );
+        }
       }
     } finally {
       if (mounted) {
@@ -300,76 +333,91 @@ class _ImpostazioniScreenState extends State<ImpostazioniScreen> {
     // a real race, not just a double-tap on this same button.
     if (_backupRunning || _migrating) return;
     setState(() => _backupRunning = true);
-    final picked = await widget.pickZip();
-    if (picked == null) {
-      if (mounted) setState(() => _backupRunning = false);
-      return;
-    }
-    if (!mounted) return;
+    try {
+      final picked = await widget.pickZip();
+      if (picked == null || !mounted) return;
 
-    final confirmed =
-        await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            key: const Key('dialog-conferma-restore'),
-            title: const Text('Ripristinare il backup?'),
-            content: const Text(
-              'Il ripristino sovrascrive i dati attuali (trasferte, spese e '
-              'foto). L\'operazione non è annullabile.',
+      final confirmed =
+          await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              key: const Key('dialog-conferma-restore'),
+              title: const Text('Ripristinare il backup?'),
+              content: const Text(
+                'Il ripristino sovrascrive i dati attuali (trasferte, spese e '
+                'foto). L\'operazione non è annullabile.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Annulla'),
+                ),
+                FilledButton(
+                  key: const Key('conferma-restore'),
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text('Ripristina'),
+                ),
+              ],
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('Annulla'),
-              ),
-              FilledButton(
-                key: const Key('conferma-restore'),
-                onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('Ripristina'),
-              ),
-            ],
-          ),
-        ) ??
-        false;
-    if (!confirmed) {
-      if (mounted) setState(() => _backupRunning = false);
-      return;
-    }
-    if (!mounted) return;
+          ) ??
+          false;
+      if (!confirmed || !mounted) return;
 
-    setState(() => _backupWorking = true);
-    final result =
-        await widget.backupService.restoreBackup(File(picked.path));
-    if (!mounted) return;
-    setState(() {
-      _backupRunning = false;
-      _backupWorking = false;
-    });
-    if (!result.ok) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(result.error!)));
-      return;
-    }
-    // No RestartWidget in v1.0 (spec decision 4): the DB connection is closed
-    // and the in-memory controllers are stale, so ask for a restart.
-    if (!mounted) return;
-    await showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        key: const Key('dialog-riavvia'),
-        title: const Text('Backup ripristinato'),
-        content: const Text(
-          'Chiudi e riavvia l\'app per vedere i dati ripristinati.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Ho capito'),
+      setState(() => _backupWorking = true);
+      final result = await widget.backupService.restoreBackup(
+        File(picked.path),
+      );
+      if (!mounted) return;
+      // Cleared here and not left to the finally: the progress bar must be
+      // gone before the dialogs below, and an indeterminate animation still on
+      // screen never lets pumpAndSettle settle.
+      setState(() => _backupWorking = false);
+      if (!result.ok) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(result.error!)));
+        return;
+      }
+      // No RestartWidget in v1.0 (spec decision 4): the DB connection is closed
+      // and the in-memory controllers are stale, so ask for a restart.
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          key: const Key('dialog-riavvia'),
+          title: const Text('Backup ripristinato'),
+          content: const Text(
+            'Chiudi e riavvia l\'app per vedere i dati ripristinati.',
           ),
-        ],
-      ),
-    );
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Ho capito'),
+            ),
+          ],
+        ),
+      );
+    } on Exception catch (e) {
+      // pickZip is a platform channel (file_selector's openFile): it throws
+      // PlatformException on SAF/activity errors and MissingPluginException
+      // when the plugin is missing. Since _backupRunning is raised *before*
+      // that await, an unguarded throw used to strand it at true — and with
+      // the screen living in HomeShell's IndexedStack its State is never
+      // recreated, so both backup buttons, the photo-dir selector and the
+      // refresh button stayed dead for the rest of the session, silently.
+      // Same failure class as the migration one fixed in _onDirKindChanged.
+      debugPrint('[NON-BLOCKING] restore flow failed: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ripristino non riuscito.')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _backupRunning = false;
+          _backupWorking = false;
+        });
+      }
+    }
   }
 
   @override
