@@ -9,6 +9,7 @@ import 'data/db/db_helper.dart';
 import 'data/repositories/foto_repository.dart';
 import 'data/repositories/spesa_repository.dart';
 import 'data/repositories/trasferta_repository.dart';
+import 'services/backup/backup_service.dart';
 import 'services/currency/exchange_service.dart';
 import 'services/ocr/claude_ocr_service.dart';
 import 'services/ocr/mlkit_ocr_service.dart';
@@ -51,6 +52,11 @@ void main() {
       tempDirProvider: () async => (await getTemporaryDirectory()).path);
 
   final apiKeyStore = ApiKeyStore();
+  final backupService = BackupService(
+    dbPathProvider: dbHelper.databasePath,
+    photoDirProvider: () async => Directory(await photoBasePath()),
+    closeDatabase: dbHelper.close,
+  );
   final exchangeService = ExchangeService(settingsService);
   final orchestrator = RecognitionOrchestrator(
     mlkitOcr: MlkitOcrService(),
@@ -71,5 +77,6 @@ void main() {
     exchangeService: exchangeService,
     cropService: cropService,
     photoDirFor: photoDirFor,
+    backupService: backupService,
   ));
 }

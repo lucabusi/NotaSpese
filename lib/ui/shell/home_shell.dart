@@ -6,6 +6,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../data/repositories/foto_repository.dart';
 import '../../data/repositories/spesa_repository.dart';
 import '../../data/repositories/trasferta_repository.dart';
+import '../../services/backup/backup_service.dart';
 import '../../services/currency/exchange_service.dart';
 import '../../services/ocr/recognition_orchestrator.dart';
 import '../../services/photo/crop_service.dart';
@@ -34,6 +35,7 @@ class HomeShell extends StatefulWidget {
     required this.exchangeService,
     required this.cropService,
     required this.photoDirFor,
+    required this.backupService,
   });
 
   final TrasfertaRepository trasfertaRepository;
@@ -47,6 +49,7 @@ class HomeShell extends StatefulWidget {
   final ExchangeService exchangeService;
   final CropService cropService;
   final Future<Directory> Function(PhotoDirKind) photoDirFor;
+  final BackupService backupService;
 
   @override
   State<HomeShell> createState() => _HomeShellState();
@@ -114,6 +117,7 @@ class _HomeShellState extends State<HomeShell> {
             apiKeyStore: widget.apiKeyStore,
             settingsService: widget.settingsService,
             photoDirFor: widget.photoDirFor,
+            backupService: widget.backupService,
           ),
         ],
       ),

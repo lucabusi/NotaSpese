@@ -7,6 +7,7 @@ import 'package:nota_spese/data/models/trasferta.dart';
 import 'package:nota_spese/data/repositories/foto_repository.dart';
 import 'package:nota_spese/data/repositories/spesa_repository.dart';
 import 'package:nota_spese/data/repositories/trasferta_repository.dart';
+import 'package:nota_spese/services/backup/backup_service.dart';
 import 'package:nota_spese/services/ocr/claude_ocr_service.dart';
 import 'package:nota_spese/services/ocr/mlkit_ocr_service.dart';
 import 'package:nota_spese/services/ocr/receipt_parser.dart';
@@ -19,6 +20,7 @@ import 'package:nota_spese/services/settings/settings_service.dart';
 import 'package:nota_spese/ui/impostazioni/impostazioni_screen.dart';
 import 'package:nota_spese/ui/shell/home_shell.dart';
 import 'package:nota_spese/version.dart';
+import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -110,6 +112,12 @@ void main() {
             tempDirProvider: () async => Directory.systemTemp.path,
           ),
           photoDirFor: (_) async => photoDir,
+          backupService: BackupService(
+            dbPathProvider: () async => p.join(Directory.systemTemp.path,
+                'nota_spese_test.db'),
+            photoDirProvider: () async => Directory.systemTemp,
+            closeDatabase: dbHelper.close,
+          ),
         ),
       ),
     );

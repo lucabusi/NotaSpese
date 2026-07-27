@@ -3,6 +3,10 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+// XFile comes from file_selector (a direct dependency): importing
+// cross_file directly would trip depend_on_referenced_packages.
+import 'package:file_selector/file_selector.dart';
+import 'package:nota_spese/services/backup/backup_service.dart';
 import 'package:nota_spese/services/ocr/parsed_receipt.dart';
 import 'package:nota_spese/services/photo/photo_dir_migration.dart';
 import 'package:nota_spese/services/settings/api_key_store.dart';
@@ -61,6 +65,41 @@ class _ControlledMigrationService extends PhotoDirMigrationService {
   }) => completer.future;
 }
 
+/// Records the calls and returns canned results. BackupService touches the
+/// real filesystem/DB, so the widget tests use this instead (the constructor
+/// still needs the required providers — they are never exercised).
+class _FakeBackupService extends BackupService {
+  _FakeBackupService({this.zip, this.restore = const RestoreResult.success()})
+      : super(
+          dbPathProvider: _unused,
+          photoDirProvider: _unusedDir,
+          closeDatabase: _noop,
+        );
+
+  static Future<String> _unused() async => '';
+  static Future<Directory> _unusedDir() async => Directory.systemTemp;
+  static Future<void> _noop() async {}
+
+  final File? zip;
+  final RestoreResult restore;
+  int createCalls = 0;
+  File? restored;
+
+  @override
+  Future<File> createBackup() async {
+    createCalls++;
+    final file = zip;
+    if (file == null) throw const FileSystemException('backup failed');
+    return file;
+  }
+
+  @override
+  Future<RestoreResult> restoreBackup(File zip) async {
+    restored = zip;
+    return restore;
+  }
+}
+
 /// The settings ListView specifically: a bare `find.byType(ListView)` is unique
 /// only while nothing else on screen is a list, and `find.byType(Scrollable)
 /// .last` is the API key TextField's own horizontal scrollable.
@@ -103,6 +142,9 @@ void main() {
     PhotoDirMigrationService migrationService =
         const PhotoDirMigrationService(),
     Future<Directory> Function(PhotoDirKind)? photoDirFor,
+    BackupService? backupService,
+    Future<XFile?> Function()? pickZip,
+    List<XFile>? shared,
   }) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -114,6 +156,9 @@ void main() {
               (kind) async =>
                   kind == PhotoDirKind.external ? externalDir : internalDir,
           migrationService: migrationService,
+          backupService: backupService ?? _FakeBackupService(),
+          pickZip: pickZip ?? () async => null,
+          shareFile: (file) async => shared?.add(file),
         ),
       ),
     );
@@ -507,6 +552,134 @@ void main() {
 
       expect(find.text('Nessuna foto da spostare.'), findsOneWidget);
       expect(find.text('0 foto spostate.'), findsNothing);
+    });
+  });
+
+  group('sezione Backup', () {
+    testWidgets('Backup ora creates the zip and shares it', (tester) async {
+      final zip = File(p.join(root.path, 'backup.zip'))
+        ..writeAsStringSync('zip-bytes');
+      final service = _FakeBackupService(zip: zip);
+      final shared = <XFile>[];
+      await pump(tester, backupService: service, shared: shared);
+
+      final button = find.byKey(const Key('backup-ora'));
+      await tester.dragUntilVisible(button, settingsList, const Offset(0, -100));
+      // dragUntilVisible stops as soon as the button is built (cache
+      // extent), and its closing ensureVisible only lands on the next
+      // frame: pump before tap (same gotcha as toggle-tassi-online above).
+      await tester.pumpAndSettle();
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+
+      expect(service.createCalls, 1);
+      expect(shared.single.path, zip.path);
+    });
+
+    testWidgets('a failing backup shows an error SnackBar', (tester) async {
+      await pump(tester, backupService: _FakeBackupService());
+
+      final button = find.byKey(const Key('backup-ora'));
+      await tester.dragUntilVisible(button, settingsList, const Offset(0, -100));
+      // dragUntilVisible stops as soon as the button is built (cache
+      // extent), and its closing ensureVisible only lands on the next
+      // frame: pump before tap (same gotcha as toggle-tassi-online above).
+      await tester.pumpAndSettle();
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Backup non riuscito.'), findsOneWidget);
+    });
+
+    testWidgets('cancelling the picker does nothing', (tester) async {
+      final service = _FakeBackupService();
+      await pump(tester,
+          backupService: service, pickZip: () async => null);
+
+      final button = find.byKey(const Key('ripristina-backup'));
+      await tester.dragUntilVisible(button, settingsList, const Offset(0, -100));
+      // dragUntilVisible stops as soon as the button is built (cache
+      // extent), and its closing ensureVisible only lands on the next
+      // frame: pump before tap (same gotcha as toggle-tassi-online above).
+      await tester.pumpAndSettle();
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+
+      expect(service.restored, isNull);
+      expect(find.byKey(const Key('dialog-conferma-restore')), findsNothing);
+    });
+
+    testWidgets('a successful restore ends with the restart dialog',
+        (tester) async {
+      final zip = File(p.join(root.path, 'from_user.zip'))
+        ..writeAsStringSync('zip-bytes');
+      final service = _FakeBackupService();
+      await pump(tester,
+          backupService: service, pickZip: () async => XFile(zip.path));
+
+      final button = find.byKey(const Key('ripristina-backup'));
+      await tester.dragUntilVisible(button, settingsList, const Offset(0, -100));
+      // dragUntilVisible stops as soon as the button is built (cache
+      // extent), and its closing ensureVisible only lands on the next
+      // frame: pump before tap (same gotcha as toggle-tassi-online above).
+      await tester.pumpAndSettle();
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('dialog-conferma-restore')), findsOneWidget);
+      expect(find.textContaining('sovrascrive'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('conferma-restore')));
+      await tester.pumpAndSettle();
+
+      expect(service.restored!.path, zip.path);
+      expect(find.byKey(const Key('dialog-riavvia')), findsOneWidget);
+      expect(find.textContaining('riavvia'), findsOneWidget);
+    });
+
+    testWidgets('declining the confirmation leaves the data alone',
+        (tester) async {
+      final zip = File(p.join(root.path, 'from_user2.zip'))
+        ..writeAsStringSync('zip-bytes');
+      final service = _FakeBackupService();
+      await pump(tester,
+          backupService: service, pickZip: () async => XFile(zip.path));
+
+      final button = find.byKey(const Key('ripristina-backup'));
+      await tester.dragUntilVisible(button, settingsList, const Offset(0, -100));
+      // dragUntilVisible stops as soon as the button is built (cache
+      // extent), and its closing ensureVisible only lands on the next
+      // frame: pump before tap (same gotcha as toggle-tassi-online above).
+      await tester.pumpAndSettle();
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Annulla'));
+      await tester.pumpAndSettle();
+
+      expect(service.restored, isNull);
+      expect(find.byKey(const Key('dialog-riavvia')), findsNothing);
+    });
+
+    testWidgets('a failed restore shows the service error', (tester) async {
+      final zip = File(p.join(root.path, 'bad.zip'))
+        ..writeAsStringSync('not-a-zip');
+      final service = _FakeBackupService(
+          restore: const RestoreResult.failure('Archivio non leggibile.'));
+      await pump(tester,
+          backupService: service, pickZip: () async => XFile(zip.path));
+
+      final button = find.byKey(const Key('ripristina-backup'));
+      await tester.dragUntilVisible(button, settingsList, const Offset(0, -100));
+      // dragUntilVisible stops as soon as the button is built (cache
+      // extent), and its closing ensureVisible only lands on the next
+      // frame: pump before tap (same gotcha as toggle-tassi-online above).
+      await tester.pumpAndSettle();
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('conferma-restore')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Archivio non leggibile.'), findsOneWidget);
+      expect(find.byKey(const Key('dialog-riavvia')), findsNothing);
     });
   });
 }

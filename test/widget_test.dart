@@ -8,6 +8,7 @@ import 'package:nota_spese/data/db/db_helper.dart';
 import 'package:nota_spese/data/repositories/foto_repository.dart';
 import 'package:nota_spese/data/repositories/spesa_repository.dart';
 import 'package:nota_spese/data/repositories/trasferta_repository.dart';
+import 'package:nota_spese/services/backup/backup_service.dart';
 import 'package:nota_spese/services/ocr/claude_ocr_service.dart';
 import 'package:nota_spese/services/ocr/mlkit_ocr_service.dart';
 import 'package:nota_spese/services/ocr/receipt_parser.dart';
@@ -73,6 +74,11 @@ void main() {
       cropService: CropService(
           tempDirProvider: () async => Directory.systemTemp.path),
       photoDirFor: (_) async => photoDir,
+      backupService: BackupService(
+        dbPathProvider: () async => '${Directory.systemTemp.path}/widget_test.db',
+        photoDirProvider: () async => photoDir,
+        closeDatabase: dbHelper.close,
+      ),
     ));
     await tester.pumpAndSettle();
 

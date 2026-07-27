@@ -6,6 +6,7 @@ import 'core/theme/app_theme.dart';
 import 'data/repositories/foto_repository.dart';
 import 'data/repositories/spesa_repository.dart';
 import 'data/repositories/trasferta_repository.dart';
+import 'services/backup/backup_service.dart';
 import 'services/currency/exchange_service.dart';
 import 'services/ocr/recognition_orchestrator.dart';
 import 'services/photo/crop_service.dart';
@@ -29,6 +30,7 @@ class NotaSpeseApp extends StatelessWidget {
     required this.exchangeService,
     required this.cropService,
     required this.photoDirFor,
+    required this.backupService,
   });
 
   final TrasfertaRepository trasfertaRepository;
@@ -42,6 +44,7 @@ class NotaSpeseApp extends StatelessWidget {
   final ExchangeService exchangeService;
   final CropService cropService;
   final Future<Directory> Function(PhotoDirKind) photoDirFor;
+  final BackupService backupService;
 
   @override
   Widget build(BuildContext context) {
@@ -60,6 +63,7 @@ class NotaSpeseApp extends StatelessWidget {
         exchangeService: exchangeService,
         cropService: cropService,
         photoDirFor: photoDirFor,
+        backupService: backupService,
       ),
     );
   }
