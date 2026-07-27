@@ -147,8 +147,14 @@ class BackupService {
             'Archivio non leggibile: zip corrotto o non valido.');
       } finally {
         // The archive entries read lazily from [input] (they share its file
-        // handle), so it can only be closed once the extraction is done.
-        await input.close();
+        // handle), so it can only be closed once the extraction is done. Its
+        // own try/catch: a failure here must not escape past the catch above
+        // and downgrade the precise "zip corrotto" message to the generic one.
+        try {
+          await input.close();
+        } catch (_) {
+          // [NON-BLOCKING] the handle is being discarded anyway.
+        }
       }
 
       final extractedDb = File(p.join(tempRoot.path, DbHelper.dbFileName));

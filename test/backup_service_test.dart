@@ -250,6 +250,45 @@ void main() {
       await helper.close();
     });
 
+    test('a failed swap rolls the photo dir back', () async {
+      // Mirror image of the test above: here the DB path is the unusable one
+      // (a regular file sits where a parent directory should be), so the photo
+      // dir IS parked and the swap then dies on
+      // Directory(dirname(dbPath)).create — the only way to reach the photo
+      // half of _rollback, which is what protects the whole photo library.
+      final blocker = File(p.join(root.path, 'blocker_db.txt'))
+        ..writeAsStringSync('not a directory');
+      final unusableDb = p.join(blocker.path, 'db', DbHelper.dbFileName);
+      File(p.join(photoDir.path, 'KEEP.jpg')).writeAsStringSync('keep');
+      final breaking = BackupService(
+        dbPathProvider: () async => unusableDb,
+        photoDirProvider: () async => photoDir,
+        closeDatabase: () async => closed++,
+        tempDirProvider: () async => tempDir,
+        dbFactory: databaseFactoryFfiNoIsolate,
+        now: () => DateTime(2026, 7, 25, 14, 30, 5),
+      );
+      final sourceDb = p.join(root.path, 'source_prb', DbHelper.dbFileName);
+      Directory(p.dirname(sourceDb)).createSync(recursive: true);
+      await writeValidDb(sourceDb, 'Nuova');
+      final sourcePhotos = Directory(p.join(root.path, 'source_prb_foto'))
+        ..createSync(recursive: true);
+      File(p.join(sourcePhotos.path, 'IMG_8.jpg')).writeAsStringSync('eight');
+      final zip = await zipOf(dbPath: sourceDb, photos: sourcePhotos);
+
+      final result = await breaking.restoreBackup(zip);
+
+      expect(result.ok, isFalse);
+      expect(result.error, contains('dati precedenti'));
+      // The photo library is back at its own path, not parked as _bak, and the
+      // backup's photos never made it in.
+      expect(File(p.join(photoDir.path, 'KEEP.jpg')).readAsStringSync(),
+          'keep');
+      expect(File(p.join(photoDir.path, 'IMG_8.jpg')).existsSync(), isFalse);
+      expect(Directory('${photoDir.path}_bak').existsSync(), isFalse);
+      expect(File(unusableDb).existsSync(), isFalse);
+    });
+
     test('a pre-existing .bak from an earlier failure is not destroyed',
         () async {
       await writeValidDb(dbFile.path, 'Vecchia');
@@ -349,10 +388,18 @@ void main() {
       expect(rows.single['nome'], 'Nuova');
       await helper.close();
     },
+        // Off Windows this regression is currently unprotected. The DB seam
+        // used here has no POSIX equivalent (rename and unlink share the same
+        // parent-directory write bit), but the photo half does: a chmod 0500
+        // subdirectory inside the photo dir still renames with its parent
+        // while the recursive delete of the _bak fails with EACCES (no-op as
+        // root, so it would need its own skip). Not written here because it
+        // cannot be run — let alone shown red then green — on this
+        // Windows-only dev machine.
         skip: Platform.isWindows
             ? null
-            : 'needs the Windows read-only attribute to block a delete '
-                'without blocking the preceding rename');
+            : 'staged with the Windows read-only attribute: it blocks the '
+                'cleanup delete without blocking the preceding rename');
 
     test('no temp extraction dir is left behind', () async {
       final sourceDb = p.join(root.path, 'source2', DbHelper.dbFileName);
