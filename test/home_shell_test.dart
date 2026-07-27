@@ -71,9 +71,14 @@ void main() {
     spesaRepo = SpesaRepository(dbHelper, fotoRepo);
   });
 
-  tearDown(() {
-    photoDir.deleteSync(recursive: true);
-    return dbHelper.close();
+  // finally: a Windows lock on the temp dir must not leak an open database
+  // into the tests that follow.
+  tearDown(() async {
+    try {
+      photoDir.deleteSync(recursive: true);
+    } finally {
+      await dbHelper.close();
+    }
   });
 
   Future<void> pump(
@@ -149,11 +154,15 @@ void main() {
 
     expect(find.byType(ImpostazioniScreen), findsOneWidget);
     // Scroll settings ListView to render version footer (pushed down by the
-    // photo and rates cards). Drag the ListView itself: the last Scrollable
-    // is the API key TextField's own one, off-screen down here.
+    // photo and rates cards). Scope the scrollable to the settings screen: a
+    // bare byType(ListView) would also match a seeded trip list, and the last
+    // Scrollable is the API key TextField's own one, off-screen down here.
     await tester.dragUntilVisible(
       find.textContaining(appVersion),
-      find.byType(ListView),
+      find.descendant(
+        of: find.byType(ImpostazioniScreen),
+        matching: find.byType(ListView),
+      ),
       const Offset(0, -100),
     );
     expect(find.textContaining(appVersion), findsOneWidget);

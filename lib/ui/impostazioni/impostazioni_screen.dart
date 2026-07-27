@@ -80,9 +80,15 @@ class _ImpostazioniScreenState extends State<ImpostazioniScreen> {
   }
 
   Future<void> _refreshUsage() async {
-    final usage = await PhotoDirUsage.measure(
-      await widget.photoDirFor(_dirKind),
-    );
+    final PhotoDirUsage usage;
+    try {
+      usage = await PhotoDirUsage.measure(await widget.photoDirFor(_dirKind));
+    } on Exception {
+      // [NON-BLOCKING] a file vanishing between the listing and its stat, or
+      // an unavailable dir, must not abort the caller: _load() would leave the
+      // whole screen unpopulated. Keep the last known figure.
+      return;
+    }
     if (!mounted) return;
     setState(() => _usage = usage);
   }
@@ -125,11 +131,14 @@ class _ImpostazioniScreenState extends State<ImpostazioniScreen> {
     setState(() => _engineDefault = engine);
   }
 
-  Future<void> _onQualityChanged(double value) async {
-    final quality = value.round();
-    setState(() => _jpgQuality = quality);
-    await widget.settingsService.setJpgQuality(quality);
-  }
+  void _onQualityChanging(double value) =>
+      setState(() => _jpgQuality = value.round());
+
+  /// Persisted on drag end only: [Slider.onChanged] fires on every tick (40
+  /// divisions), which would hit SharedPreferences dozens of times per drag
+  /// for the same final value. The label still follows the thumb live.
+  Future<void> _onQualityChanged(double value) =>
+      widget.settingsService.setJpgQuality(value.round());
 
   /// The `foto` table stores paths relative to the photo base dir, so
   /// switching dir without moving the files would hide every existing photo:
@@ -166,34 +175,54 @@ class _ImpostazioniScreenState extends State<ImpostazioniScreen> {
     if (!confirmed || !mounted) return;
 
     setState(() => _migrating = true);
-    final from = await widget.photoDirFor(_dirKind);
-    final to = await widget.photoDirFor(target);
-    final result = await widget.migrationService.migrate(from: from, to: to);
-    if (!mounted) return;
-    if (result.ok) {
-      await widget.settingsService.setPhotoDirKind(target);
+    try {
+      final from = await widget.photoDirFor(_dirKind);
+      final to = await widget.photoDirFor(target);
+      final result = await widget.migrationService.migrate(from: from, to: to);
       if (!mounted) return;
-      setState(() {
-        _dirKind = target;
-        _migrating = false;
-      });
+      if (result.ok) {
+        await widget.settingsService.setPhotoDirKind(target);
+        if (!mounted) return;
+        setState(() => _dirKind = target);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(_esitoSpostamento(result))));
+        await _refreshUsage();
+      } else {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(result.error!)));
+      }
+    } on Exception {
+      // Neither photoDirFor (MissingPlatformDirectoryException) nor
+      // PhotoDirMigrationService (its source listing sits outside its own try)
+      // is exception-total. Without this the screen would keep _migrating at
+      // true forever and, since it lives in HomeShell's IndexedStack and is
+      // never rebuilt from scratch, the selector would stay dead for the rest
+      // of the session. The move is abandoned before any delete, so the photos
+      // are still in the previous dir and the setting has not changed.
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text(
-            result.movedFiles == 1
-                ? '1 foto spostata.'
-                : '${result.movedFiles} foto spostate.',
+            'Spostamento non riuscito: le foto sono rimaste nella cartella precedente.',
           ),
         ),
       );
-      await _refreshUsage();
-    } else {
-      setState(() => _migrating = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(result.error!)));
+    } finally {
+      if (mounted) setState(() => _migrating = false);
     }
   }
+
+  /// 0 files is not an error: internal and external resolve to the same dir
+  /// when getExternalStorageDirectory() is unavailable (main.dart), and
+  /// "0 foto spostate." would read as a failure.
+  String _esitoSpostamento(MigrationResult result) =>
+      switch (result.movedFiles) {
+        0 => 'Nessuna foto da spostare.',
+        1 => '1 foto spostata.',
+        final moved => '$moved foto spostate.',
+      };
 
   Future<void> _onTassiOnlineChanged(bool value) async {
     await widget.settingsService.setTassiOnline(value);
@@ -302,7 +331,8 @@ class _ImpostazioniScreenState extends State<ImpostazioniScreen> {
                   SettingsService.maxJpgQuality - SettingsService.minJpgQuality,
               label: '$_jpgQuality%',
               value: _jpgQuality.toDouble(),
-              onChanged: _onQualityChanged,
+              onChanged: _onQualityChanging,
+              onChangeEnd: _onQualityChanged,
             ),
             const Text('Vale per le nuove foto.'),
             const SizedBox(height: 16),
@@ -330,7 +360,9 @@ class _ImpostazioniScreenState extends State<ImpostazioniScreen> {
                 Expanded(child: Text('Spazio usato: ${_usage.label}')),
                 IconButton(
                   key: const Key('refresh-spazio'),
-                  onPressed: _refreshUsage,
+                  // Measuring a dir that a migration is emptying would race
+                  // it, and its setState could land after the migration's.
+                  onPressed: _migrating ? null : _refreshUsage,
                   icon: const Icon(Icons.refresh),
                   tooltip: 'Ricalcola',
                 ),
