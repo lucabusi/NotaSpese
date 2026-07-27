@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import 'core/theme/app_theme.dart';
@@ -26,6 +28,7 @@ class NotaSpeseApp extends StatelessWidget {
     required this.apiKeyStore,
     required this.exchangeService,
     required this.cropService,
+    required this.photoDirFor,
   });
 
   final TrasfertaRepository trasfertaRepository;
@@ -38,6 +41,7 @@ class NotaSpeseApp extends StatelessWidget {
   final ApiKeyStore apiKeyStore;
   final ExchangeService exchangeService;
   final CropService cropService;
+  final Future<Directory> Function(PhotoDirKind) photoDirFor;
 
   @override
   Widget build(BuildContext context) {
@@ -55,6 +59,7 @@ class NotaSpeseApp extends StatelessWidget {
         apiKeyStore: apiKeyStore,
         exchangeService: exchangeService,
         cropService: cropService,
+        photoDirFor: photoDirFor,
       ),
     );
   }

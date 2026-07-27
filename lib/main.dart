@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -27,14 +29,16 @@ void main() {
   // Single photo base dir shared by FotoRepository and PhotoService.
   // v1.0: app-specific dirs only (scoped storage, Specifiche.md §2);
   // external falls back to internal when unavailable.
-  Future<String> photoBasePath() async {
-    final kind = await settingsService.photoDirKind;
+  Future<Directory> photoDirFor(PhotoDirKind kind) async {
     final dir = kind == PhotoDirKind.external
         ? (await getExternalStorageDirectory() ??
             await getApplicationDocumentsDirectory())
         : await getApplicationDocumentsDirectory();
-    return p.join(dir.path, 'foto');
+    return Directory(p.join(dir.path, 'foto'));
   }
+
+  Future<String> photoBasePath() async =>
+      (await photoDirFor(await settingsService.photoDirKind)).path;
 
   final fotoRepository =
       FotoRepository(dbHelper, basePathProvider: photoBasePath);
@@ -66,5 +70,6 @@ void main() {
     apiKeyStore: apiKeyStore,
     exchangeService: exchangeService,
     cropService: cropService,
+    photoDirFor: photoDirFor,
   ));
 }

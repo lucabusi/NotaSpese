@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -31,6 +33,7 @@ class HomeShell extends StatefulWidget {
     required this.apiKeyStore,
     required this.exchangeService,
     required this.cropService,
+    required this.photoDirFor,
   });
 
   final TrasfertaRepository trasfertaRepository;
@@ -43,6 +46,7 @@ class HomeShell extends StatefulWidget {
   final ApiKeyStore apiKeyStore;
   final ExchangeService exchangeService;
   final CropService cropService;
+  final Future<Directory> Function(PhotoDirKind) photoDirFor;
 
   @override
   State<HomeShell> createState() => _HomeShellState();
@@ -109,6 +113,7 @@ class _HomeShellState extends State<HomeShell> {
           ImpostazioniScreen(
             apiKeyStore: widget.apiKeyStore,
             settingsService: widget.settingsService,
+            photoDirFor: widget.photoDirFor,
           ),
         ],
       ),

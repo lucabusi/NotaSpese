@@ -51,9 +51,13 @@ void main() {
   late TrasfertaRepository trasfertaRepo;
   late SpesaRepository spesaRepo;
   late FotoRepository fotoRepo;
+  // Own (empty) dir: the settings screen measures the photo dir recursively,
+  // so systemTemp itself would be walked whole.
+  late Directory photoDir;
 
   setUp(() {
     SharedPreferences.setMockInitialValues({});
+    photoDir = Directory.systemTemp.createTempSync('home_shell_test_');
     // No-isolate factory: see trasferta_detail_screen_test.dart.
     dbHelper = DbHelper(
       factory: databaseFactoryFfiNoIsolate,
@@ -67,7 +71,10 @@ void main() {
     spesaRepo = SpesaRepository(dbHelper, fotoRepo);
   });
 
-  tearDown(() => dbHelper.close());
+  tearDown(() {
+    photoDir.deleteSync(recursive: true);
+    return dbHelper.close();
+  });
 
   Future<void> pump(
     WidgetTester tester, {
@@ -97,6 +104,7 @@ void main() {
           cropService: CropService(
             tempDirProvider: () async => Directory.systemTemp.path,
           ),
+          photoDirFor: (_) async => photoDir,
         ),
       ),
     );
@@ -140,10 +148,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(ImpostazioniScreen), findsOneWidget);
-    // Scroll settings ListView to render version footer (pushed down by rates toggle card).
+    // Scroll settings ListView to render version footer (pushed down by the
+    // photo and rates cards). Drag the ListView itself: the last Scrollable
+    // is the API key TextField's own one, off-screen down here.
     await tester.dragUntilVisible(
       find.textContaining(appVersion),
-      find.byType(Scrollable).last,
+      find.byType(ListView),
       const Offset(0, -100),
     );
     expect(find.textContaining(appVersion), findsOneWidget);

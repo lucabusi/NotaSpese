@@ -49,6 +49,10 @@ void main() {
     final trasfertaRepo = TrasfertaRepository(dbHelper, fotoRepo);
     final spesaRepo = SpesaRepository(dbHelper, fotoRepo);
     addTearDown(dbHelper.close);
+    // Own (empty) dir: the settings tab measures the photo dir recursively,
+    // so systemTemp itself would be walked whole.
+    final photoDir = Directory.systemTemp.createTempSync('widget_test_');
+    addTearDown(() => photoDir.deleteSync(recursive: true));
 
     await tester.pumpWidget(NotaSpeseApp(
       trasfertaRepository: trasfertaRepo,
@@ -68,6 +72,7 @@ void main() {
       exchangeService: FakeExchangeService(),
       cropService: CropService(
           tempDirProvider: () async => Directory.systemTemp.path),
+      photoDirFor: (_) async => photoDir,
     ));
     await tester.pumpAndSettle();
 
