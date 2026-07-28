@@ -209,21 +209,21 @@
 **Verifica fase 7**
 - [ ] Export di una trasferta reale con foto: PDF apribile e completo, CSV importabile in Excel/Calc, share sheet funzionante
 
-## Fase 8 — Impostazioni + Backup/Restore ▢
-- [ ] Schermata Impostazioni completa (layout dal mockup, estende il `SettingsService` minimale nato in fase 4/5): motore OCR default (ML Kit / IA locale se GO / Claude Vision), API key, cartella foto, qualità JPG (default 70%), spazio usato, backup, toggle tassi online, versione app
-- [ ] Setting qualità JPG: slider/selettore (es. 50–90%), persistito in `SharedPreferences`, letto da `photo_service.dart`; nota UI "si applica alle nuove foto"
-- [ ] Gestione modello IA locale: download on-demand (~529 MB, avviso Wi-Fi), stato/dimensione, pulsante elimina; l'indicatore spazio include il modello; opzione motore visibile solo a modello scaricato e gate fase 5 superato
-- [ ] API key Claude Vision: inserimento/modifica, salvata con `flutter_secure_storage` (Android Keystore, mai in chiaro), mostrata mascherata
-- [ ] Scelta directory foto con migrazione file esistenti (o avviso)
-- [ ] Indicatore spazio usato cartella foto (conteggio file + MB)
-- [ ] `backup_service.dart`: zip `nota_spese.db` + cartella foto → directory scelta/share sheet; trigger manuale con progress
-- [ ] Restore da zip: estrazione su file temporanei → swap atomico → riapertura DB → reload UI via `RestartWidget` (vedi Specifiche §9)
-- [ ] Interfaccia `BackupService` con stub `uploadToDrive()` per v1.1 (non implementato)
-- [ ] Versione DB incrementabile in `db_helper.dart` (migrazione formale rimandata a v1.1)
+## Fase 8 — Impostazioni + Backup/Restore ✅
+- [x] Schermata Impostazioni completa (`lib/ui/impostazioni/impostazioni_screen.dart`, sostituisce `ImpostazioniMinimal`): motore OCR default (ML Kit / Claude Vision), API key, cartella foto, qualità JPG, spazio usato, backup, toggle tassi online, versione app
+- [x] Setting qualità JPG: slider 50–90 (default 70), persistito in `SharedPreferences`, letto da `photo_service.dart`; nota UI "vale per le nuove foto"
+- [ ] ~~Gestione modello IA locale~~ — **fuori scope fase 8** (decisione 2026-07-25): nessun `LocalAiOcrService` esiste, gate benchmark fase 5 non superato → nessuna UI di download/stato/eliminazione, l'indicatore spazio copre solo la cartella foto
+- [x] API key Claude Vision: inserimento/modifica mascherata, `flutter_secure_storage` (invariato da fase 5)
+- [x] Scelta directory foto con migrazione file esistenti (`PhotoDirMigrationService`, dialog "Migra ora"/"Annulla": i path in DB sono relativi alla base dir, cambiare cartella senza spostare le foto le renderebbe invisibili → nessuna opzione "lascia dove sono")
+- [x] Indicatore spazio usato cartella foto (`PhotoDirUsage`: conteggio file + MB, ricalcolo on-demand)
+- [x] `backup_service.dart`: zip `nota_spese.db` + cartella foto → share sheet; trigger manuale con progress
+- [x] Restore da zip: estrazione in temp → validazione schema DB → swap con `.bak` + rollback → dialog "riavvia l'app" (no `RestartWidget`, decisione 2026-07-25)
+- [x] Interfaccia `BackupService` con stub `uploadToDrive()` per v1.1 (lancia `UnimplementedError`)
+- [x] Versione DB: hook `onUpgrade` no-op in `db_helper.dart` così un futuro bump non rompe le install esistenti (`dbVersion` resta 1: schema invariato in fase 8)
 
 **Verifica fase 8**
-- [ ] Ciclo completo su emulatore: backup → cancella una trasferta → restore → dati e foto tornati, app coerente senza riavvio manuale (o con dialog riavvio)
-- [ ] API key salvata sopravvive al riavvio e non compare in SharedPreferences
+- [ ] ~~Ciclo completo su emulatore~~ — **SKIP esplicito** (nessun emulatore su questa macchina, gotcha `CLAUDE.md`): compensato da `test/backup_service_test.dart` (create + restore valido/DB invalido/zip corrotto/rollback), `test/photo_dir_migration_test.dart` e `test/impostazioni_screen_test.dart`; collaudo reale rimandato a device fisico (stile fase 6b)
+- [ ] API key salvata sopravvive al riavvio e non compare in SharedPreferences → verificabile solo su device (invariato da fase 5)
 
 ## Fase 9 — Archivio, polish, release ▢
 - [ ] Archivio: filtro per anno/mese, ricerca per nome/luogo
