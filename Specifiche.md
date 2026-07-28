@@ -26,7 +26,7 @@
 | `image` | compressione JPG + thumbnail (pure Dart, testabile su host — sostituisce `flutter_image_compress`, deciso in fase 4) | 4 |
 | `share_plus` | share sheet (viewer foto, export) — anticipato dalla fase 7 | 4 |
 | `permission_handler` | **non usato in v1.0**: scanner = UI Play Services (no permessi in-app), `image_picker` gestisce CAMERA da se; permessi dichiarati nel manifest | 4 |
-| `file_picker` | selezione zip per restore + destinazione backup (SAF) | 8 |
+| `file_selector` | selezione zip per il restore (SAF) — sostituisce `file_picker`, incompatibile con `share_plus 13` (win32) | 8 |
 | `google_mlkit_text_recognition` | OCR offline (default), script latino — implementato fase 5, `MlkitOcrService` | 5 |
 | `flutter_gemma` | IA locale: Gemma 3 1B on-device — **non aggiunto**, rimandato al gate benchmark su device (decisione 2026-07-18) | 5 (rimandato) |
 | `http` | Claude Vision API (raw HTTP, `ClaudeOcrService`) + frankfurter.app — implementato fase 5 | 5/6 |
@@ -72,7 +72,7 @@ flutter pub get
 ```
 lib/
 ├── main.dart                          # entrypoint: init DB, settings, runApp
-├── app.dart                           # MaterialApp, tema, route, RestartWidget (restore §9)
+├── app.dart                           # MaterialApp, tema, route (restore: dialog riavvio, §9)
 ├── version.dart                       # $Version app (bump a ogni modifica funzionale)
 ├── core/
 │   ├── theme/app_theme.dart           # ThemeData Material 3 (vedi Design System)
@@ -337,6 +337,7 @@ CREATE TABLE foto (
 - ⚠️ **Vincolo directory (scoped storage):** su Android 13+ una directory arbitraria esterna implica SAF/`content://` URI (niente path file diretti, gestione permessi persistenti). Per v1.0 limitare la scelta a: storage interno app (`getApplicationDocumentsDirectory()`) o external app-specific (`getExternalFilesDir()`) — entrambe con path reali e senza permessi extra. Directory arbitrarie via SAF → v1.1 se serve.
 - **Compressione:** ogni foto viene compressa in JPG (qualità configurabile in Impostazioni, **default 70%**, max 1920px lato lungo) con il package `image` (pure Dart, decisione fase 4: pipeline unit-testabile senza device) prima del salvataggio su disco. L'originale non viene conservato. Il cambio qualità vale solo per le foto nuove (nessuna ricompressione retroattiva).
 - **Thumbnail:** generato contestualmente alla compressione (300px), salvato in sottocartella `thumbnails/`.
+- **Path in DB relativi alla directory foto** (`FotoRepository.basePathProvider`): cambiare directory senza spostare i file renderebbe invisibili tutte le foto esistenti → il cambio in Impostazioni è possibile solo con migrazione ("Migra ora"/"Annulla"), e la migrazione non tocca il DB perché i path relativi restano validi.
 - **Cancellazione:** alla rimozione di una spesa, tutti i file foto e thumbnail associati vanno eliminati dal filesystem prima di cancellare il record DB. La sequenza è: cancella spesa da interfaccia → cancella file fisici → cancella record `foto` → cancella record `spesa`.
 
 ### 🌐 OCR — note specifiche
@@ -389,7 +390,7 @@ CREATE TABLE foto (
 
 ### 9. Restore → Reload stato app
 - Sequenza restore: valida zip → chiudi connessione DB (`db.close()`) → sovrascrivi `nota_spese.db` e cartella foto → riapri DB → ricarica settings.
-- Reload UI senza package esterni: widget radice `RestartWidget` (cambia `Key` del sottoalbero → tutti i controller vengono ricreati e rileggono dal DB). In alternativa v1.0 minima: dialog "Backup ripristinato — riavvia l'app".
+- Reload UI dopo il restore: **v1.0 usa il dialog "Backup ripristinato — riavvia l'app"** (decisione fase 8, 2026-07-25): la connessione DB viene chiusa dallo swap e i controller in memoria sono stale; `RestartWidget` resta un'opzione v1.1 (meno codice e meno rischio su un flusso non testabile su emulatore).
 - Durante il restore: UI bloccata da progress modale; in caso di errore lo zip NON deve lasciare stato misto → restore su file temporanei, swap solo a estrazione completata.
 
 ### 10. Testing — receipt_parser.dart

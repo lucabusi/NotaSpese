@@ -8,6 +8,7 @@ import 'package:nota_spese/data/db/db_helper.dart';
 import 'package:nota_spese/data/repositories/foto_repository.dart';
 import 'package:nota_spese/data/repositories/spesa_repository.dart';
 import 'package:nota_spese/data/repositories/trasferta_repository.dart';
+import 'package:nota_spese/services/backup/backup_service.dart';
 import 'package:nota_spese/services/ocr/claude_ocr_service.dart';
 import 'package:nota_spese/services/ocr/mlkit_ocr_service.dart';
 import 'package:nota_spese/services/ocr/receipt_parser.dart';
@@ -49,6 +50,10 @@ void main() {
     final trasfertaRepo = TrasfertaRepository(dbHelper, fotoRepo);
     final spesaRepo = SpesaRepository(dbHelper, fotoRepo);
     addTearDown(dbHelper.close);
+    // Own (empty) dir: the settings tab measures the photo dir recursively,
+    // so systemTemp itself would be walked whole.
+    final photoDir = Directory.systemTemp.createTempSync('widget_test_');
+    addTearDown(() => photoDir.deleteSync(recursive: true));
 
     await tester.pumpWidget(NotaSpeseApp(
       trasfertaRepository: trasfertaRepo,
@@ -68,6 +73,12 @@ void main() {
       exchangeService: FakeExchangeService(),
       cropService: CropService(
           tempDirProvider: () async => Directory.systemTemp.path),
+      photoDirFor: (_) async => photoDir,
+      backupService: BackupService(
+        dbPathProvider: () async => '${Directory.systemTemp.path}/widget_test.db',
+        photoDirProvider: () async => photoDir,
+        closeDatabase: dbHelper.close,
+      ),
     ));
     await tester.pumpAndSettle();
 

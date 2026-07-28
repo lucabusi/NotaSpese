@@ -81,4 +81,32 @@ void main() {
     expect(await db.getVersion(), DbHelper.dbVersion);
     expect(DbHelper.dbVersion, 1);
   });
+
+  test('databasePath resolves to the injected path', () async {
+    expect(await dbHelper.databasePath(), inMemoryDatabasePath);
+  });
+
+  test('expectedTables matches the tables actually created', () async {
+    final db = await dbHelper.database;
+    final rows = await db.rawQuery(
+        "SELECT name FROM sqlite_master WHERE type = 'table'");
+    final names = rows.map((r) => r['name'] as String).toSet();
+    expect(names.containsAll(DbHelper.expectedTables), isTrue);
+    expect(DbHelper.expectedTables, {'trasferte', 'spese', 'foto'});
+  });
+
+  test('onUpgrade is a no-op hook that leaves data untouched', () async {
+    final db = await dbHelper.database;
+    await db.insert('trasferte', {
+      'nome': 'T',
+      'data_inizio': '2026-07-25',
+      'valuta_default': 'EUR',
+      'archiviata': 0,
+      'created_at': '2026-07-25T10:00:00.000',
+    });
+
+    await DbHelper.onUpgrade(db, 1, 2);
+
+    expect((await db.query('trasferte')).length, 1);
+  });
 }
