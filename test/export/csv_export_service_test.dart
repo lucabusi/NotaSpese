@@ -69,10 +69,11 @@ void main() {
       ),
     ]));
     // Total is the last row: CsvEncoder adds no trailing eol after it.
-    expect(csv, contains('TOTALE EUR;;;;;10,00;;'));
+    expect(csv, contains('TOTALE EUR;;;;;10,00'));
   });
 
-  test('total row notes excluded expenses when some are unconverted', () {
+  test('per-currency summary reports count, total and what is unconverted',
+      () {
     final csv = const CsvExportService().build(TrasfertaReport.build(_trip(), [
       Spesa(
         id: 1,
@@ -85,6 +86,9 @@ void main() {
         createdAt: DateTime(2026, 7, 2),
       ),
     ]));
-    expect(csv, contains('TOTALE EUR;;;;;0,00;;esclude 1 spese non convertite'));
+    expect(csv, contains('RIEPILOGO PER VALUTA'));
+    // valuta;n. spese;totale;totale EUR;senza conversione
+    expect(csv, contains('JPY;1;1000,00;0,00;1'));
+    expect(csv, isNot(contains('esclude')));
   });
 }

@@ -1,6 +1,7 @@
 import '../../core/constants/categories.dart';
 import '../db/db_helper.dart';
 import '../models/spesa.dart';
+import '../models/valuta_breakdown.dart';
 import 'foto_repository.dart';
 
 /// Expense CRUD + per-trasferta aggregations. Deleting a spesa also
@@ -72,6 +73,33 @@ class SpesaRepository {
       for (final row in rows)
         row['valuta'] as String: (row['totale'] as num).toDouble(),
     };
+  }
+
+  /// Per-currency aggregation in one pass: how many spese, their total in the
+  /// original currency, how much of it is converted, and how many still lack
+  /// `importo_eur`. Replaces calling totaliPerValuta + totaleEur +
+  /// countSenzaEur separately on the detail screen.
+  Future<List<ValutaBreakdown>> breakdownPerValuta(int trasfertaId,
+      {required String valutaTrasferta}) async {
+    final db = await _dbHelper.database;
+    final rows = await db.rawQuery(
+        'SELECT valuta, '
+        'COUNT(*) AS n, '
+        'SUM(importo) AS totale, '
+        'COALESCE(SUM(importo_eur), 0) AS totale_eur, '
+        'SUM(CASE WHEN importo_eur IS NULL THEN 1 ELSE 0 END) AS senza_eur '
+        'FROM spese WHERE trasferta_id = ? GROUP BY valuta',
+        [trasfertaId]);
+    return ordinaPerValuta([
+      for (final row in rows)
+        ValutaBreakdown(
+          valuta: row['valuta'] as String,
+          count: (row['n'] as num).toInt(),
+          totale: (row['totale'] as num).toDouble(),
+          totaleEur: (row['totale_eur'] as num).toDouble(),
+          countSenzaEur: (row['senza_eur'] as num).toInt(),
+        ),
+    ], valutaTrasferta);
   }
 
   /// Sum of converted amounts; spese without importo_eur are excluded

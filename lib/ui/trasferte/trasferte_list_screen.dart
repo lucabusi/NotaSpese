@@ -6,6 +6,7 @@ import '../../core/utils/formatters.dart';
 import '../../data/repositories/foto_repository.dart';
 import '../../data/repositories/spesa_repository.dart';
 import '../../data/repositories/trasferta_repository.dart';
+import '../../services/currency/conversion_backfill_service.dart';
 import '../../services/currency/exchange_service.dart';
 import '../../services/ocr/recognition_orchestrator.dart';
 import '../../services/photo/crop_service.dart';
@@ -74,7 +75,9 @@ class _TrasferteListScreenState extends State<TrasferteListScreen> {
             widget.trasfertaRepository,
             widget.spesaRepository,
             widget.fotoRepository,
-            widget.photoService),
+            widget.photoService,
+            backfill: ConversionBackfillService(
+                widget.spesaRepository, widget.exchangeService)),
         captureService: widget.captureService,
         orchestrator: widget.orchestrator,
         settingsService: widget.settingsService,

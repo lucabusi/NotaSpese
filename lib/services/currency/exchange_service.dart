@@ -13,11 +13,13 @@ class ExchangeResult {
   final double rate;
 }
 
-/// EUR conversion via frankfurter.app historical rates (fase 6 design).
+/// EUR conversion from two chained sources. ECB reference rates
+/// (frankfurter) come first because they are the ones citable in an expense
+/// claim; a community source covers the ~10 currencies the ECB does not
+/// publish (RSD, AED, KWD, QAR, SAR, TWD, VND, ALL, BAM, MKD).
 /// Never throws toward callers: ANY failure — toggle off, offline, timeout,
-/// non-200, malformed JSON, unsupported currency (frankfurter → 404, e.g.
-/// RSD/AED are outside the ECB set) — returns null so the expense flow is
-/// never blocked.
+/// non-200, malformed JSON, unknown currency, date outside a source's
+/// history — returns null so the expense flow is never blocked.
 class ExchangeService {
   ExchangeService(this._settings,
       {http.Client? client, this.timeout = const Duration(seconds: 5)})
@@ -30,6 +32,11 @@ class ExchangeService {
   /// Session cache: 'yyyy-MM-dd|CUR' → rate. Historical rates never change,
   /// so entries stay valid for the whole app run.
   final Map<String, double> _rateCache = {};
+
+  /// Currencies frankfurter answered 404 for: outside the ECB set, a
+  /// permanent fact, so later conversions skip straight to the fallback.
+  /// Only 404 lands here — a network failure must stay retryable.
+  final Set<String> _ecbUnsupported = {};
 
   Future<ExchangeResult?> convert({
     required double amount,
@@ -50,20 +57,57 @@ class ExchangeService {
   }
 
   Future<double?> _fetchRate(String day, String from) async {
-    final uri =
-        Uri.https('api.frankfurter.app', '/$day', {'from': from, 'to': 'EUR'});
+    if (!_ecbUnsupported.contains(from)) {
+      final ecb = await _fetchEcbRate(day, from);
+      if (ecb.rate != null) return ecb.rate;
+      if (ecb.unsupported) _ecbUnsupported.add(from);
+    }
+    return _fetchGlobalRate(day, from);
+  }
+
+  /// ECB rates via frankfurter. `unsupported` is true only on HTTP 404
+  /// (currency outside the ECB set); every other failure leaves it false so
+  /// the caller retries this source next time.
+  Future<({double? rate, bool unsupported})> _fetchEcbRate(
+      String day, String from) async {
+    const failed = (rate: null, unsupported: false);
+    final uri = Uri.https(
+        'api.frankfurter.dev', '/v1/$day', {'from': from, 'to': 'EUR'});
+    try {
+      final response = await _client.get(uri).timeout(timeout);
+      if (response.statusCode == 404) return (rate: null, unsupported: true);
+      if (response.statusCode != 200) return failed;
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map<String, dynamic>) return failed;
+      final rates = decoded['rates'];
+      if (rates is! Map<String, dynamic>) return failed;
+      final rate = rates['EUR'];
+      return (rate: rate is num ? rate.toDouble() : null, unsupported: false);
+    } on Exception {
+      // TimeoutException, SocketException, ClientException, FormatException:
+      // all mapped to "no rate available, but retry this source later".
+      return failed;
+    }
+  }
+
+  /// Fallback source: daily historical files on a CDN, no API key. The rate
+  /// is nested under the lowercased source currency, e.g. {"aed":{"eur":..}}.
+  /// A 404 here means "no data for this day or currency" and is not cached:
+  /// unlike the ECB set, it is not a permanent property of the currency.
+  Future<double?> _fetchGlobalRate(String day, String from) async {
+    final cur = from.toLowerCase();
+    final uri = Uri.https('cdn.jsdelivr.net',
+        '/npm/@fawazahmed0/currency-api@$day/v1/currencies/$cur.json');
     try {
       final response = await _client.get(uri).timeout(timeout);
       if (response.statusCode != 200) return null;
       final decoded = jsonDecode(response.body);
       if (decoded is! Map<String, dynamic>) return null;
-      final rates = decoded['rates'];
+      final rates = decoded[cur];
       if (rates is! Map<String, dynamic>) return null;
-      final rate = rates['EUR'];
+      final rate = rates['eur'];
       return rate is num ? rate.toDouble() : null;
     } on Exception {
-      // TimeoutException, SocketException, ClientException, FormatException:
-      // all mapped to "no rate available".
       return null;
     }
   }

@@ -55,6 +55,28 @@ void main() {
     expect(r.totaliPerValuta.keys.toList(), ['JPY', 'EUR', 'USD']);
   });
 
+  test('build produces an ordered per-currency breakdown', () {
+    final r = TrasfertaReport.build(_trip(valuta: 'JPY'), [
+      _spesa(valuta: 'JPY', importo: 1000, importoEur: 6.1),
+      _spesa(valuta: 'JPY', importo: 2000, importoEur: 12.2),
+      _spesa(valuta: 'AED', importo: 50),
+    ]);
+
+    expect(r.breakdown.map((b) => b.valuta).toList(), ['JPY', 'AED']);
+
+    final jpy = r.breakdown.first;
+    expect(jpy.count, 2);
+    expect(jpy.totale, 3000);
+    expect(jpy.totaleEur, closeTo(18.3, 0.0001));
+    expect(jpy.countSenzaEur, 0);
+
+    final aed = r.breakdown.last;
+    expect(aed.count, 1);
+    expect(aed.totale, 50);
+    expect(aed.totaleEur, 0);
+    expect(aed.countSenzaEur, 1);
+  });
+
   test('totaleEur sums non-null, countSenzaEur counts nulls', () {
     final r = TrasfertaReport.build(_trip(), [
       _spesa(importoEur: 6.5),

@@ -226,6 +226,43 @@ void main() {
       expect(await repo.countSenzaEur(trasfertaId), 1);
     });
 
+    test('breakdownPerValuta aggregates count, totals and missing EUR',
+        () async {
+      await repo.insert(spesa(importo: 1000, valuta: 'JPY', importoEur: 6.1));
+      await repo.insert(spesa(importo: 2000, valuta: 'JPY', importoEur: 12.2));
+      await repo.insert(spesa(importo: 50, valuta: 'AED'));
+      final righe =
+          await repo.breakdownPerValuta(trasfertaId, valutaTrasferta: 'JPY');
+
+      expect(righe.map((r) => r.valuta).toList(), ['JPY', 'AED']);
+
+      final jpy = righe.first;
+      expect(jpy.count, 2);
+      expect(jpy.totale, 3000);
+      expect(jpy.totaleEur, closeTo(18.3, 0.0001));
+      expect(jpy.countSenzaEur, 0);
+
+      final aed = righe.last;
+      expect(aed.count, 1);
+      expect(aed.totale, 50);
+      expect(aed.totaleEur, 0, reason: 'nothing converted yet');
+      expect(aed.countSenzaEur, 1);
+    });
+
+    test('breakdownPerValuta puts the trip currency first', () async {
+      await repo.insert(spesa(importo: 10000, valuta: 'JPY'));
+      await repo.insert(spesa(importo: 5, valuta: 'EUR', importoEur: 5));
+      final righe =
+          await repo.breakdownPerValuta(trasfertaId, valutaTrasferta: 'EUR');
+      expect(righe.map((r) => r.valuta).toList(), ['EUR', 'JPY']);
+    });
+
+    test('breakdownPerValuta on a trip without spese is empty', () async {
+      final righe =
+          await repo.breakdownPerValuta(trasfertaId, valutaTrasferta: 'EUR');
+      expect(righe, isEmpty);
+    });
+
     test('countByTrasferta counts only that trip', () async {
       await repo.insert(spesa());
       await repo.insert(spesa());

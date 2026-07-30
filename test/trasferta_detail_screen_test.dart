@@ -11,6 +11,7 @@ import 'package:nota_spese/data/models/trasferta.dart';
 import 'package:nota_spese/data/repositories/foto_repository.dart';
 import 'package:nota_spese/data/repositories/spesa_repository.dart';
 import 'package:nota_spese/data/repositories/trasferta_repository.dart';
+import 'package:nota_spese/services/currency/conversion_backfill_service.dart';
 import 'package:nota_spese/services/export/export_service.dart';
 import 'package:nota_spese/services/ocr/claude_ocr_service.dart';
 import 'package:nota_spese/services/ocr/mlkit_ocr_service.dart';
@@ -172,11 +173,13 @@ void main() {
       {_FakeOrchestrator? orchestrator,
       int? id,
       CropService? cropService,
-      ExportService? exportService}) async {
+      ExportService? exportService,
+      ConversionBackfillService? backfill}) async {
     await tester.pumpWidget(MaterialApp(
       home: TrasfertaDetailScreen(
         controller: TrasfertaDetailController(
-            id ?? trasfertaId, trasfertaRepo, spesaRepo, fotoRepo, photoService),
+            id ?? trasfertaId, trasfertaRepo, spesaRepo, fotoRepo, photoService,
+            backfill: backfill),
         captureService: _FakeCaptureService(sourceJpg),
         orchestrator: orchestrator ?? _FakeOrchestrator(),
         settingsService: SettingsService(),
@@ -256,7 +259,8 @@ void main() {
     // category bar, and the spesa tile — all 3000, all now rendered with
     // formatValuta so the decimal count matches JPY (0 decimals) too.
     expect(find.text('¥ 3.000'), findsNWidgets(3));
-    expect(find.text('≈ € 17,90'), findsOneWidget);
+    // The EUR hint now rides along the per-currency row, with the count.
+    expect(find.text('1 spesa · ≈ € 17,90'), findsOneWidget);
     expect(find.text('Totali per categoria (JPY)'), findsOneWidget);
   });
 
@@ -278,7 +282,9 @@ void main() {
     expect(find.text('¥ 3.000'), findsNWidgets(3));
     expect(find.textContaining('≈ €'), findsNothing);
     expect(find.text('€ 0,00'), findsNothing);
-    expect(find.text('1 spese senza conversione EUR'), findsOneWidget);
+    // The missing conversion is now surfaced as an actionable button
+    // instead of a dead-end note.
+    expect(find.text('Ricalcola'), findsOneWidget);
   });
 
   testWidgets(
@@ -952,5 +958,75 @@ void main() {
 
     expect(export.calls, isEmpty);
     expect(find.text('Nessuna spesa da esportare'), findsOneWidget);
+  });
+
+  // --- per-currency summary + on-demand reconversion ---
+
+  Spesa breakdownSpesa({
+    double importo = 1000,
+    String valuta = 'JPY',
+    double? importoEur,
+  }) =>
+      Spesa(
+        trasfertaId: trasfertaId,
+        data: DateTime(2026, 7, 10),
+        categoria: Categoria.pranzo,
+        importo: importo,
+        valuta: valuta,
+        importoEur: importoEur,
+        createdAt: DateTime(2026, 7, 10, 12),
+      );
+
+  testWidgets('header shows count and amount per currency', (tester) async {
+    await spesaRepo.insert(breakdownSpesa(importo: 1000, importoEur: 6.1));
+    await spesaRepo.insert(breakdownSpesa(importo: 2000, importoEur: 12.2));
+    await spesaRepo.insert(breakdownSpesa(importo: 50, valuta: 'AED'));
+    await pump(tester);
+
+    expect(find.textContaining('2 spese'), findsWidgets);
+    expect(find.textContaining('1 spesa'), findsWidgets);
+    expect(find.textContaining('≈'), findsWidgets);
+  });
+
+  testWidgets('Ricalcola is hidden when every spesa is converted',
+      (tester) async {
+    await spesaRepo.insert(breakdownSpesa(importoEur: 6.1));
+    await pump(tester);
+    expect(find.text('Ricalcola'), findsNothing);
+  });
+
+  testWidgets('Ricalcola appears when a conversion is missing',
+      (tester) async {
+    await spesaRepo.insert(breakdownSpesa());
+    await pump(tester);
+    expect(find.text('Ricalcola'), findsOneWidget);
+  });
+
+  testWidgets('tapping Ricalcola converts and reports the outcome',
+      (tester) async {
+    await spesaRepo.insert(breakdownSpesa(importo: 1000));
+    await pump(tester,
+        backfill: ConversionBackfillService(
+            spesaRepo, FakeExchangeService(rate: 0.0061)));
+
+    await tester.tap(find.byKey(const Key('ricalcola-conversioni')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Convertita 1 spesa'), findsOneWidget);
+    expect(find.text('Ricalcola'), findsNothing,
+        reason: 'nothing left to convert after a full run');
+  });
+
+  testWidgets('Ricalcola with no rate available says so', (tester) async {
+    await spesaRepo.insert(breakdownSpesa(importo: 1000));
+    await pump(tester,
+        backfill: ConversionBackfillService(spesaRepo, FakeExchangeService()));
+
+    await tester.tap(find.byKey(const Key('ricalcola-conversioni')));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Nessun tasso disponibile'), findsOneWidget);
+    expect(find.text('Ricalcola'), findsOneWidget,
+        reason: 'still unconverted, the button must stay available');
   });
 }

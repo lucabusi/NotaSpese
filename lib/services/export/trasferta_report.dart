@@ -1,6 +1,7 @@
 import '../../core/constants/categories.dart';
 import '../../data/models/spesa.dart';
 import '../../data/models/trasferta.dart';
+import '../../data/models/valuta_breakdown.dart';
 
 /// One expense as it appears in an export (a flattened [Spesa]).
 class ReportRow {
@@ -34,6 +35,7 @@ class TrasfertaReport {
   const TrasfertaReport({
     required this.trasferta,
     required this.righe,
+    required this.breakdown,
     required this.totaliPerValuta,
     required this.totaleEur,
     required this.countSenzaEur,
@@ -43,6 +45,10 @@ class TrasfertaReport {
 
   final Trasferta trasferta;
   final List<ReportRow> righe;
+
+  /// Per-currency detail: count + original total + converted total, ordered
+  /// with the trip currency first. What the cover and the CSV summary show.
+  final List<ValutaBreakdown> breakdown;
 
   /// Sum of `importo` per currency; trip currency first, then descending.
   final Map<String, double> totaliPerValuta;
@@ -65,13 +71,21 @@ class TrasfertaReport {
       perValuta[s.valuta] = (perValuta[s.valuta] ?? 0) + s.importo;
     }
     final valutaTrasferta = trasferta.valutaDefault;
-    final valuteOrdinate = perValuta.entries.toList()
-      ..sort((a, b) {
-        if (a.key == valutaTrasferta) return -1;
-        if (b.key == valutaTrasferta) return 1;
-        return b.value.compareTo(a.value);
-      });
-    final totaliPerValuta = {for (final e in valuteOrdinate) e.key: e.value};
+    final breakdown = ordinaPerValuta([
+      for (final valuta in perValuta.keys)
+        ValutaBreakdown(
+          valuta: valuta,
+          count: spese.where((s) => s.valuta == valuta).length,
+          totale: perValuta[valuta]!,
+          totaleEur: spese
+              .where((s) => s.valuta == valuta && s.importoEur != null)
+              .fold<double>(0, (sum, s) => sum + s.importoEur!),
+          countSenzaEur: spese
+              .where((s) => s.valuta == valuta && s.importoEur == null)
+              .length,
+        ),
+    ], valutaTrasferta);
+    final totaliPerValuta = {for (final b in breakdown) b.valuta: b.totale};
 
     final totaleEur = spese
         .where((s) => s.importoEur != null)
@@ -111,6 +125,7 @@ class TrasfertaReport {
             note: s.note,
           ),
       ],
+      breakdown: breakdown,
       totaliPerValuta: totaliPerValuta,
       totaleEur: totaleEur,
       countSenzaEur: countSenzaEur,

@@ -262,4 +262,53 @@ void main() {
     expect(c.valutaUnica, isNull);
     expect(c.totaliPerCategoria, isEmpty);
   });
+
+  test('load fills the per-currency breakdown', () async {
+    await spesaRepo.insert(Spesa(
+      trasfertaId: trasfertaId,
+      data: DateTime(2026, 7, 11),
+      categoria: Categoria.cena,
+      importo: 3000,
+      valuta: 'JPY',
+      importoEur: 18,
+      createdAt: DateTime(2026, 7, 11, 21),
+    ));
+    await spesaRepo.insert(Spesa(
+      trasfertaId: trasfertaId,
+      data: DateTime(2026, 7, 12),
+      categoria: Categoria.taxi,
+      importo: 50,
+      valuta: 'AED',
+      createdAt: DateTime(2026, 7, 12, 9),
+    ));
+
+    final c = controller();
+    await c.load();
+
+    expect(c.breakdown.map((b) => b.valuta).toSet(), {'JPY', 'AED'});
+    final aed = c.breakdown.firstWhere((b) => b.valuta == 'AED');
+    expect(aed.count, 1);
+    expect(aed.totale, 50);
+    expect(aed.totaleEur, 0);
+    expect(aed.countSenzaEur, 1);
+  });
+
+  test('ricalcolaConversioni without a backfill service is a no-op', () async {
+    await spesaRepo.insert(Spesa(
+      trasfertaId: trasfertaId,
+      data: DateTime(2026, 7, 11),
+      categoria: Categoria.cena,
+      importo: 3000,
+      valuta: 'JPY',
+      createdAt: DateTime(2026, 7, 11, 21),
+    ));
+    final c = controller();
+    await c.load();
+
+    final outcome = await c.ricalcolaConversioni();
+
+    expect(outcome.convertite, 0);
+    expect(outcome.fallite, 0);
+    expect(c.countSenzaEur, 1, reason: 'nothing was converted');
+  });
 }

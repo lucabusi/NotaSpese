@@ -8,6 +8,8 @@ import '../../core/theme/app_theme.dart';
 import '../../core/utils/formatters.dart';
 import '../../data/models/spesa.dart';
 import '../../data/models/trasferta.dart';
+import '../../data/models/valuta_breakdown.dart';
+import '../../services/currency/conversion_backfill_service.dart';
 import '../../services/currency/exchange_service.dart';
 import '../../services/export/export_service.dart';
 import '../../services/export/trasferta_report.dart';
@@ -18,7 +20,6 @@ import '../../services/photo/crop_service.dart';
 import '../../services/photo/receipt_capture_service.dart';
 import '../../services/settings/settings_service.dart';
 import '../foto/crop_screen.dart';
-import '../shared/currency_rows.dart';
 import '../spese/ocr_progress.dart';
 import '../spese/spesa_form_screen.dart';
 import 'trasferta_detail_controller.dart';
@@ -77,12 +78,38 @@ class _TrasfertaDetailScreenState extends State<TrasfertaDetailScreen> {
   // rebuild forever) sheet defaults; loaded once, best-effort.
   OcrEngine _engineDefault = OcrEngine.mlkit;
   bool _claudeAvailable = false;
+  bool _ricalcolando = false;
 
   @override
   void initState() {
     super.initState();
     controller.load();
     _loadOcrSettings();
+  }
+
+  Future<void> _ricalcolaConversioni() async {
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _ricalcolando = true);
+    final BackfillOutcome outcome;
+    try {
+      outcome = await controller.ricalcolaConversioni();
+    } finally {
+      if (mounted) setState(() => _ricalcolando = false);
+    }
+    if (!mounted) return;
+    messenger.showSnackBar(SnackBar(content: Text(_esitoRicalcolo(outcome))));
+  }
+
+  /// Italian agreement: "Convertita 1 spesa" vs "Convertite 3 spese".
+  String _esitoRicalcolo(BackfillOutcome outcome) {
+    if (outcome.nessunaConversione) {
+      return 'Nessun tasso disponibile: controlla la connessione';
+    }
+    final n = outcome.convertite;
+    final testa = n == 1 ? 'Convertita 1 spesa' : 'Convertite $n spese';
+    return outcome.fallite == 0
+        ? testa
+        : '$testa su ${n + outcome.fallite}';
   }
 
   Future<void> _loadOcrSettings() async {
@@ -472,7 +499,11 @@ class _TrasfertaDetailScreenState extends State<TrasfertaDetailScreen> {
               : ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
-                    _TotalsHeader(controller: controller),
+                    _TotalsHeader(
+                      controller: controller,
+                      onRicalcola: _ricalcolaConversioni,
+                      ricalcolando: _ricalcolando,
+                    ),
                     if (controller.totaliPerCategoria.isNotEmpty) ...[
                       const SizedBox(height: 12),
                       _CategoryTotals(
@@ -516,9 +547,29 @@ class _TrasfertaDetailScreenState extends State<TrasfertaDetailScreen> {
 }
 
 class _TotalsHeader extends StatelessWidget {
-  const _TotalsHeader({required this.controller});
+  const _TotalsHeader({
+    required this.controller,
+    required this.onRicalcola,
+    required this.ricalcolando,
+  });
 
   final TrasfertaDetailController controller;
+  final VoidCallback onRicalcola;
+  final bool ricalcolando;
+
+  /// A trip without spese still shows an amount, in its own currency, so the
+  /// header never renders blank (rule inherited from `righeValuta`).
+  List<ValutaBreakdown> get _righe => controller.breakdown.isNotEmpty
+      ? controller.breakdown
+      : [
+          ValutaBreakdown(
+            valuta: controller.trasferta?.valutaDefault ?? 'EUR',
+            count: 0,
+            totale: 0,
+            totaleEur: 0,
+            countSenzaEur: 0,
+          ),
+        ];
 
   @override
   Widget build(BuildContext context) {
@@ -532,34 +583,40 @@ class _TotalsHeader extends StatelessWidget {
             Text('Totale trasferta',
                 style: textTheme.labelMedium
                     ?.copyWith(color: AppColors.textSecondary)),
-            for (final e in righeValuta(controller.totaliPerValuta,
-                controller.trasferta?.valutaDefault ?? 'EUR'))
+            for (final b in _righe) ...[
               Text(
-                formatValuta(e.value, e.key),
+                formatValuta(b.totale, b.valuta),
                 style: textTheme.headlineMedium?.copyWith(
                   fontFeatures: amountFontFeatures,
                   fontWeight: FontWeight.w800,
                 ),
               ),
-            // The EUR line is a hint, not the total: hidden when there is
-            // nothing converted (would read as a zeroed trip) and when EUR
-            // is already the only currency shown above (shared rule in
-            // currency_rows.dart).
-            if (mostraSuggerimentoEur(
-                controller.totaleEur, controller.totaliPerValuta))
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  '≈ ${formatEur(controller.totaleEur)}',
+              if (b.count > 0)
+                Text(
+                  // The EUR hint is redundant on a EUR row, and misleading
+                  // as "≈ € 0,00" when nothing here is converted.
+                  '${b.count == 1 ? '1 spesa' : '${b.count} spese'}'
+                  '${b.valuta == 'EUR' || b.totaleEur == 0 ? '' : ' · ≈ ${formatEur(b.totaleEur)}'}',
                   style: textTheme.bodySmall
                       ?.copyWith(color: AppColors.textSecondary),
                 ),
-              ),
+            ],
             if (controller.countSenzaEur > 0)
-              Text(
-                '${controller.countSenzaEur} spese senza conversione EUR',
-                style: textTheme.bodySmall
-                    ?.copyWith(color: AppColors.textTertiary),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  key: const Key('ricalcola-conversioni'),
+                  // Disabling while in flight (onPressed: null) also stops a
+                  // second tap from launching a parallel run.
+                  icon: ricalcolando
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Symbols.currency_exchange, size: 18),
+                  label: Text(ricalcolando ? 'Conversione…' : 'Ricalcola'),
+                  onPressed: ricalcolando ? null : onRicalcola,
+                ),
               ),
           ],
         ),

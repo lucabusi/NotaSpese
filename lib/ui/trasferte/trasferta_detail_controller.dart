@@ -6,9 +6,11 @@ import '../../core/constants/categories.dart';
 import '../../data/models/foto.dart';
 import '../../data/models/spesa.dart';
 import '../../data/models/trasferta.dart';
+import '../../data/models/valuta_breakdown.dart';
 import '../../data/repositories/foto_repository.dart';
 import '../../data/repositories/spesa_repository.dart';
 import '../../data/repositories/trasferta_repository.dart';
+import '../../services/currency/conversion_backfill_service.dart';
 import '../../services/photo/photo_service.dart';
 
 /// Detail screen state: the trip, its spese grouped by date, totals and
@@ -16,7 +18,8 @@ import '../../services/photo/photo_service.dart';
 /// UI never touches PhotoService/FotoRepository ordering rules.
 class TrasfertaDetailController extends ChangeNotifier {
   TrasfertaDetailController(this.trasfertaId, this._trasfertaRepository,
-      this._spesaRepository, this._fotoRepository, this._photoService);
+      this._spesaRepository, this._fotoRepository, this._photoService,
+      {this.backfill});
 
   final int trasfertaId;
   final TrasfertaRepository _trasfertaRepository;
@@ -24,12 +27,17 @@ class TrasfertaDetailController extends ChangeNotifier {
   final FotoRepository _fotoRepository;
   final PhotoService _photoService;
 
+  /// Optional so tests and previews can build a controller without wiring
+  /// the network; [ricalcolaConversioni] degrades to a no-op without it.
+  final ConversionBackfillService? backfill;
+
   bool loading = false;
   Trasferta? trasferta;
   Map<DateTime, List<Spesa>> speseByData = {};
   double totaleEur = 0;
   int countSenzaEur = 0;
   Map<String, double> totaliPerValuta = {};
+  List<ValutaBreakdown> breakdown = [];
   Map<Categoria, double> totaliPerCategoria = {};
   Map<int, Foto> fotoBySpesa = {};
 
@@ -54,6 +62,8 @@ class TrasfertaDetailController extends ChangeNotifier {
     totaleEur = await _spesaRepository.totaleEur(trasfertaId);
     countSenzaEur = await _spesaRepository.countSenzaEur(trasfertaId);
     totaliPerValuta = await _spesaRepository.totaliPerValuta(trasfertaId);
+    breakdown = await _spesaRepository.breakdownPerValuta(trasfertaId,
+        valutaTrasferta: trasferta?.valutaDefault ?? 'EUR');
     totaliPerCategoria = valutaUnica == null
         ? await _spesaRepository.totaliEurPerCategoria(trasfertaId)
         : await _spesaRepository.totaliPerCategoria(trasfertaId);
@@ -65,6 +75,18 @@ class TrasfertaDetailController extends ChangeNotifier {
     };
     loading = false;
     notifyListeners();
+  }
+
+  /// User-triggered backfill of the missing EUR conversions. Returns a
+  /// zeroed outcome when no backfill service is wired (tests, previews).
+  Future<BackfillOutcome> ricalcolaConversioni() async {
+    final servizio = backfill;
+    if (servizio == null) {
+      return const BackfillOutcome(convertite: 0, fallite: 0);
+    }
+    final outcome = await servizio.run(trasfertaId);
+    if (outcome.convertite > 0) await load();
+    return outcome;
   }
 
   Future<void> updateTrasferta(Trasferta aggiornata) async {

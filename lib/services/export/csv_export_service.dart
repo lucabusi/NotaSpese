@@ -32,14 +32,21 @@ class CsvExportService {
           r.note ?? '',
         ],
       const <String>[],
+      const ['RIEPILOGO PER VALUTA'],
+      const ['Valuta', 'N. spese', 'Totale', 'Totale EUR', 'Senza conversione'],
+      for (final b in report.breakdown)
+        [
+          b.valuta,
+          '${b.count}',
+          _money(b.totale),
+          _money(b.totaleEur),
+          b.countSenzaEur == 0 ? '' : '${b.countSenzaEur}',
+        ],
+      const <String>[],
       [
         'TOTALE EUR',
         '', '', '', '',
         _money(report.totaleEur),
-        '',
-        report.countSenzaEur > 0
-            ? 'esclude ${report.countSenzaEur} spese non convertite'
-            : '',
       ],
     ];
     return const CsvEncoder(
