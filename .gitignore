@@ -131,6 +131,6 @@ app.*.symbols
 
 # Claude local instruction files
 claude.local.md
-claude.md
+CLAUDE.md
 
 
