@@ -1,8 +1,28 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nota_spese/core/constants/categories.dart';
 import 'package:nota_spese/core/constants/currencies.dart';
+import 'package:nota_spese/version.dart';
 
 void main() {
+  // `appVersion` is what Settings shows; `pubspec.yaml` is what ends up in the
+  // APK. They are two hand-maintained copies of the same fact, and they DID
+  // drift (0.14.0+20 installed, "v0.13.1" on screen, 2026-08-20): the widget
+  // tests compare the screen against the same constant, so only pubspec can
+  // catch the mismatch.
+  test('appVersion matches the version in pubspec.yaml', () {
+    final pubspec = File('pubspec.yaml').readAsStringSync();
+    final match =
+        RegExp(r'^version:\s*(\S+?)\+', multiLine: true).firstMatch(pubspec);
+    expect(match, isNotNull, reason: 'no `version: x.y.z+build` in pubspec');
+    expect(
+      appVersion,
+      match!.group(1),
+      reason: 'bump lib/version.dart together with pubspec.yaml',
+    );
+  });
+
   group('Categoria', () {
     test('has the 10 categories from the spec', () {
       expect(Categoria.values.map((c) => c.name), [
