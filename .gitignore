@@ -134,4 +134,9 @@ app.*.symbols
 claude.local.md
 CLAUDE.md
 
-
+# [PRIVACY] Le foto degli scontrini di training NON sono versionate: mostrano
+# i numeri carta stampati sullo scontrino e il repo e' pubblico (rimosse dalla
+# storia il 2026-08-20). Restano in locale per l'harness on-device
+# integration_test/mlkit_ocr_accuracy_test.dart; le trascrizioni mascherate in
+# test/fixtures/real_receipts/jp/ sono versionate e bastano agli harness host.
+scontrini_training/*.jpg

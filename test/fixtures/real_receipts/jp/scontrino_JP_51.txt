@@ -1,0 +1,37 @@
+クレジットカード売上票
+CREDIT CARD SALES SLIP
+お客様控え
+CUSTOMER'S COPY
+大切に保存してください
+PLEASE KEEP THIS RECEIPT
+加盟店名     PIYO PIZZA
+MERCHANT
+電話番号         090-7224-7014
+STORE PHONE
+売場         係員
+カード会社  ＤＣ
+CARD COMPANY
+端末番号      XXXXX-XXX-30254
+TERMINAL NUMBER
+ご利用日 2026年06月13日 14:01:00
+DATE
+IC/MS識別子                     CL
+会員番号     XXXXXXXXXXXXXXXX
+ACCOUNT NUMBER
+有効期限                  XX年XX月
+EXPIRY DATE
+AID      A0000000031010
+APPLICATION ID
+伝票番号                     00110
+SLIP NUMBER
+取引内容                      売上
+TRANSACTION TYPE
+支払区分                      一括
+PAYMENT PLAN
+商品区分                   0000990
+PRODUCT CODE
+承認番号                    456479
+APPROVAL CODE
+合計金額                    ¥3,700
+TOTAL AMOUNT
+ご利用ありがとうございました。

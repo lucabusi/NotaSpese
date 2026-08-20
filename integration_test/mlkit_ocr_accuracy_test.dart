@@ -27,6 +27,13 @@ import 'package:path_provider/path_provider.dart';
 /// `--- OCR <name> BEGIN/END ---` markers so it can be captured from the
 /// console.
 ///
+/// Le 53 foto NON sono versionate (mostrano i numeri carta stampati sullo
+/// scontrino e il repo e' pubblico): vanno copiate a mano in
+/// `scontrini_training/` prima di lanciare questa suite, altrimenti fallisce
+/// subito con "no receipt photos bundled as assets". Gli harness host
+/// (`test/real_receipts*_accuracy_test.dart`) girano invece sulle
+/// trascrizioni mascherate, che sono versionate.
+///
 /// Run (device connected, USB debugging on):
 ///   `flutter test integration_test/mlkit_ocr_accuracy_test.dart -d <deviceId>`
 void main() {
