@@ -168,21 +168,24 @@
 - [ ] Tutti i bug raccolti fixati o esplicitamente rimandati (con motivazione) a v1.1
 - [ ] `flutter test` + `flutter analyze` verdi dopo i fix
 
-## Fase 6c — Training e affinamento parser su scontrini reali (JP) ▢
+## Fase 6c — Training e affinamento parser su scontrini reali (JP) ✅ 2026-08-20
 
-> Dataset: 14 foto di scontrini giapponesi in `scontrini_training/` (`scontrino_JP_01..14.jpg`). Obiettivo: misurare l'accuratezza del parser fase 5 su scontrini reali e affinare le regole di riconoscimento (importo, data, valuta, esercente, voto lingua). Vincolo: ML Kit OCR non è eseguibile su questa macchina (gotcha ambiente Android in `CLAUDE.md`) → il testo si ottiene per trascrizione fedele delle foto (simulando l'output OCR, rumore incluso); la verifica con OCR reale on-device resta in fase 6b. Metodo estendibile in seguito ad altre lingue.
+> Dataset: **53 foto** di scontrini giapponesi in `scontrini_training/` (`scontrino_JP_01..54.jpg`, il 14 è stato rimosso dall'utente) + ground truth tabellare in `scontrini_training/scontrini_analisi.csv`. Obiettivo: misurare l'accuratezza del parser su scontrini reali e affinare le regole (importo, data, valuta, esercente, voto lingua). Vincolo invariato: ML Kit non è eseguibile su questa macchina e **nessun device Android era collegato** (`flutter devices` 2026-08-20) → il testo si ottiene per trascrizione fedele delle foto; la verifica con OCR reale on-device resta in fase 6b.
 
-- [ ] Trascrivere ogni immagine in fixture `.txt` (riga per riga, layout e rumore fedeli allo scontrino) in `test/fixtures/receipts/training/jp/`
-- [ ] Per ogni fixture, `.expected.json` con ground truth verificata a mano (importo, valuta, data, esercente, lingua)
-- [ ] Baseline: eseguire il parser sulle 14 fixture e registrare l'accuratezza per campo (importo / data / valuta / esercente / lingua)
-- [ ] Analisi errori: classificare i miss per causa (keyword totale mancante, formato data non coperto, decimali, voto lingua, rumore OCR)
-- [ ] Affinare le regole in `receipt_parser.dart` / `language_profiles.dart` (es. keyword totale JA aggiuntive, pattern data, euristiche layout) — modifiche chirurgiche, zero regressioni sulle fixture esistenti
-- [ ] Promuovere le 14 fixture a regression test permanenti (suite fixture esistente o file dedicato)
-- [ ] Documentare regole nuove/modificate ed eventuali gotcha in `Specifiche.md` / `CLAUDE.md`
+- [x] Trascritte tutte le immagini in fixture `.txt` (riga per riga, layout fedele) in `test/fixtures/real_receipts/jp/` — 54 fixture (le 14 preesistenti + 40 nuove)
+- [x] Per ogni fixture, `.expected.json` con ground truth dal CSV (importo, valuta, data, esercente, lingua)
+- [x] Baseline sulle 54 fixture: **212/216 = 98,1%** — 4 KO: `SUPERMARKET` come fornitore (JP_24), riga intestatario `___様` (JP_25), data con anno a 2 cifre `26/07/25` (JP_31), `合計 8.858` + `端数処理 ¥-8` (JP_45)
+- [x] Analisi errori per causa e fix chirurgici in `receipt_parser.dart` / `language_profiles.dart`: pattern data `yy/mm/dd` solo per il profilo ja, `roundingKeywords` (`端数処理`) applicati al totale keyword, righe-rumore fornitore (categoria generica, blank intestatario, `明細`, frasi di cortesia)
+- [x] **Secondo harness, su testo degradato** (`test/real_receipts_noise_accuracy_test.dart`): applica agli stessi scontrini gli errori ML Kit già misurati on-device (`¥`->`4`, migliaia spezzate, full-width, `ー`->`-`, `O`->`口`, `加`->`カ`, logo con `#`) più le fusioni di righe di `reconstructReadingOrder`, su 40 degradazioni diverse per scontrino. Nessuna cifra viene mai cambiata in un'altra cifra: la ground truth resta sempre recuperabile.
+- [x] Fix guidati dall'harness rumoroso: keyword valutata sul **proprio span** invece che sull'intera riga (una riga fusa `合計 ¥880 お預り ¥1.000` non viene più scartata), token di codice (`ARC00`, `T90210…`) e orari (`17:38`) esclusi dagli importi, riga-titolo esclusa dal fallback di colonna, recupero del nome negoziante prima di un campo metadato / dopo una frase di cortesia o un'intestazione documento
+- [x] Fixture promosse a regression test permanenti (due suite dedicate, gate `>= 95%`)
+- [ ] Documentare regole nuove/modificate in `Specifiche.md` — da fare alla prossima revisione della spec
 
-**Verifica fase 6c**
-- [ ] Accuratezza post-affinamento sulle 14 fixture: importo ≥ 12/14, data ≥ 12/14, valuta 14/14 (JPY), lingua 14/14 — soglie riviste se il dataset reale si rivela più rumoroso del previsto (motivare)
-- [ ] `flutter test` verde (fixture esistenti + nuove) + `flutter analyze` zero issue
+**Verifica fase 6c** (eseguita 2026-08-20)
+- [x] Trascrizioni pulite: **216/216 = 100%** (importo 54/54, data 54/54, valuta 54/54, fornitore 54/54)
+- [x] Testo degradato ML Kit, 40 seed x 54 scontrini: **8635/8640 = 99,9%** (5 KO residui, tutti fornitore: banner reclutamento fuso in JP_49, nome perso in 2 seed su JP_25)
+- [x] `flutter test` verde (467 test) + `flutter analyze` zero issue
+- [ ] **Non verificato**: accuratezza con OCR ML Kit reale — richiede device Android collegato (`integration_test/mlkit_ocr_accuracy_test.dart`, ora bundla tutte e 53 le foto). Ultima misura reale disponibile: 96,4% su 14 scontrini (v0.9.3, 2026-07-22)
 
 ## Fase 6d — Crop immagine post-scatto ▢
 

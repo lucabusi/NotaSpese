@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 0.13.1+19
+version: 0.14.0+20
 
 environment:
   sdk: ^3.12.2
@@ -79,14 +79,14 @@ flutter:
   uses-material-design: true
 
   # [OCR-HARNESS] Asset usati SOLO da integration_test/mlkit_ocr_accuracy_test.dart
-  # (misura accuratezza ML Kit on-device sulle foto reali). ~2 MB: rimuovere
-  # queste righe prima di una build di release.
+  # (misura accuratezza ML Kit on-device sulle foto reali). ~7 MB (53 foto):
+  # rimuovere queste righe prima di una build di release.
   assets:
     # PDF export fonts (Noto Sans + Noto Sans JP) — KEEP in release builds.
     - assets/fonts/
     # [OCR-HARNESS] Asset usati SOLO da integration_test/mlkit_ocr_accuracy_test.dart
-    # (misura accuratezza ML Kit on-device sulle foto reali). ~2 MB: rimuovere
-    # queste righe prima di una build di release.
+    # (misura accuratezza ML Kit on-device sulle foto reali). ~7 MB (53 foto):
+    # rimuovere queste righe prima di una build di release.
     - scontrini_training/
     - test/fixtures/real_receipts/jp/
 

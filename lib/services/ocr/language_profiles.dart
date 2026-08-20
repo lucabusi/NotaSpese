@@ -23,12 +23,18 @@ class LanguageProfile {
     required this.negativeKeywords,
     required this.datePatterns,
     required this.numberFormat,
+    this.roundingKeywords = const [],
     this.defaultCurrency,
   });
 
   final String code;
   final List<String> totalKeywords; // lowercase, per priorità
   final List<String> negativeKeywords; // lowercase
+
+  /// Labels of a rounding line that corrects the printed total (JP
+  /// `端数処理 ¥-8`): its signed value is added to the keyword total, because
+  /// what the customer is charged is total + adjustment.
+  final List<String> roundingKeywords;
   final List<ReceiptDatePattern> datePatterns;
   final AmountNumberFormat numberFormat;
   final String? defaultCurrency; // ja→JPY, sr→RSD, de→EUR, it→EUR, en→null
@@ -43,6 +49,14 @@ final RegExp _jaKanjiDate =
     RegExp(r'(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日');
 final RegExp _jaSlashDate = RegExp(r'\b(\d{4})/(\d{1,2})/(\d{1,2})\b');
 final RegExp _isoDashDate = RegExp(r'\b(\d{4})-(\d{1,2})-(\d{1,2})\b');
+// Second-hand/POS terminals print the year with two digits (`売上 26/07/25`,
+// misura su foto reali 2026-08-20, scontrino 駿河屋). Japanese receipts are
+// always year-first, so `yy/mm/dd` is unambiguous here — unlike the latin
+// profiles, where the same shape would collide with `dd/mm/yy`. The
+// lookarounds keep it from matching inside a 4-digit-year date (`2026/07/25`)
+// or a longer digit run.
+final RegExp _jaShortSlashDate =
+    RegExp(r'(?<![\d/])(\d{2})/(\d{1,2})/(\d{1,2})(?![\d/])');
 
 final Map<String, LanguageProfile> languageProfiles = {
   'it': LanguageProfile(
@@ -102,11 +116,16 @@ final Map<String, LanguageProfile> languageProfiles = {
       '番号',
       'tel',
       '電話',
+      '端数',
     ],
+    roundingKeywords: ['端数処理', '端数調整', '端数値引'],
     datePatterns: [
       ReceiptDatePattern(_jaKanjiDate, 'ymd'),
       ReceiptDatePattern(_jaSlashDate, 'ymd'),
       ReceiptDatePattern(_isoDashDate, 'ymd'),
+      // Last: a 4-digit year elsewhere on the receipt is always the better
+      // reading, so the short form only wins when nothing else matched.
+      ReceiptDatePattern(_jaShortSlashDate, 'ymd'),
     ],
     numberFormat: AmountNumberFormat.integerOnly,
     defaultCurrency: 'JPY',

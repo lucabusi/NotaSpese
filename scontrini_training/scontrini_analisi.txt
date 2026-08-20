@@ -1,0 +1,369 @@
+[01] scontrino_JP_01.jpg
+  Venditore.....: HARD OFF - ハードオフ宇都宮駅東店
+  Luogo.........: Utsunomiya (Tochigi), stazione Utsunomiya uscita est
+  Importo totale: 6.680 JPY
+  Data e ora....: 2026-07-12 19:11
+  Tipo di spesa.: Negozio (usato / videogiochi - elettronica)
+
+[02] scontrino_JP_02.jpg
+  Venditore.....: Yaoko Marketplace - ヤオコー トナリエ宇都宮店
+  Luogo.........: Utsunomiya (Tochigi), c.c. Tonarie
+  Importo totale: 1.508 JPY
+  Data e ora....: 2026-07-09 17:53
+  Tipo di spesa.: Supermercato
+
+[03] scontrino_JP_03.jpg
+  Venditore.....: York Benimaru - ヨークベニマル 宇都宮テラス店
+  Luogo.........: Utsunomiya (Tochigi), Utsunomiya Terrace
+  Importo totale: 1.580 JPY
+  Data e ora....: 2026-07-16 17:56
+  Tipo di spesa.: Supermercato
+
+[04] scontrino_JP_04.jpg
+  Venditore.....: York Benimaru - ヨークベニマル 宇都宮テラス店
+  Luogo.........: Utsunomiya (Tochigi), Utsunomiya Terrace
+  Importo totale: 2.089 JPY
+  Data e ora....: 2026-07-14 17:53
+  Tipo di spesa.: Supermercato
+
+[05] scontrino_JP_05.jpg
+  Venditore.....: Utsunomiya Mobility Service (宇都宮モビリティサービス) - gruppo Hinomaru Limousine
+  Luogo.........: Utsunomiya (Tochigi), Nibancho 2-7
+  Importo totale: 5.520 JPY
+  Data e ora....: 2026-07-17 17:36
+  Tipo di spesa.: Taxi
+
+[06] scontrino_JP_06.jpg
+  Venditore.....: Utsunomiya Mobility Service (宇都宮モビリティサービス)
+  Luogo.........: Utsunomiya (Tochigi)
+  Importo totale: 5.520 JPY
+  Data e ora....: 2026-07-14 17:38
+  Tipo di spesa.: Taxi
+
+[07] scontrino_JP_07.jpg
+  Venditore.....: あなたのお店 (ristorante italiano - reg. T7810262141749)
+  Luogo.........: n.d. sullo scontrino (Giappone)
+  Importo totale: 6.775 JPY
+  Data e ora....: 2026-07-10 21:22
+  Tipo di spesa.: Ristorante (cucina italiana: coperto, crostini, pici/tagliatelle, vino, amaro)
+
+[08] scontrino_JP_08.jpg
+  Venditore.....: CAPCOM STORE Tokyo - カプコンストア トーキョー店
+  Luogo.........: Tokyo, Shibuya-ku Udagawacho 15-1, Shibuya PARCO 6F
+  Importo totale: 2.640 JPY
+  Data e ora....: 2026-07-05 16:35
+  Tipo di spesa.: Negozio (merchandising / gadget)
+
+[09] scontrino_JP_09.jpg
+  Venditore.....: ユニオンコマース (Union Commerce)
+  Luogo.........: n.d. (ricevuta di pagamento con carta MUFG)
+  Importo totale: 8.480 JPY
+  Data e ora....: 2026-07-11 14:55
+  Tipo di spesa.: Altro / acquisto non specificato (solo slip carta di credito)
+
+[10] scontrino_JP_10.jpg
+  Venditore.....: LAWSON - 宇都宮駅西口店
+  Luogo.........: Utsunomiya (Tochigi), Kawamukocho 1-23
+  Importo totale: 1.489 JPY
+  Data e ora....: 2026-07-05 20:07
+  Tipo di spesa.: Minimarket / convenience store
+
+[11] scontrino_JP_11.jpg
+  Venditore.....: Utsunomiya Mobility Service (宇都宮モビリティサービス)
+  Luogo.........: Utsunomiya (Tochigi)
+  Importo totale: 5.520 JPY
+  Data e ora....: 2026-07-17 07:38
+  Tipo di spesa.: Taxi
+
+[12] scontrino_JP_12.jpg
+  Venditore.....: 健太餃子 東口店 (Kenta Gyoza - Utsunomiya Gyoza-kan)
+  Luogo.........: Utsunomiya (Tochigi), Higashi-Shukugo 1-9-1
+  Importo totale: 1.710 JPY
+  Data e ora....: 2026-07-13 20:46
+  Tipo di spesa.: Ristorante
+
+[13] scontrino_JP_13.jpg
+  Venditore.....: KAWARAYA - かわらや宇都宮店
+  Luogo.........: Utsunomiya (Tochigi), Ikegamicho 3-11 6F
+  Importo totale: 17.780 JPY
+  Data e ora....: 2026-07-11 22:11
+  Tipo di spesa.: Ristorante / izakaya
+
+[15] scontrino_JP_15.jpg
+  Venditore.....: NewDays - ND宇都宮中央
+  Luogo.........: Utsunomiya (Tochigi), Kawamukocho 1-23
+  Importo totale: 1.087 JPY
+  Data e ora....: 2026-07-19 20:11
+  Tipo di spesa.: Minimarket / convenience store
+
+[16] scontrino_JP_16.jpg
+  Venditore.....: York Benimaru - ヨークベニマル 宇都宮テラス店
+  Luogo.........: Utsunomiya (Tochigi), Utsunomiya Terrace
+  Importo totale: 1.715 JPY
+  Data e ora....: 2026-07-28 17:56
+  Tipo di spesa.: Supermercato
+
+[17] scontrino_JP_17.jpg
+  Venditore.....: あなたのお店 (ristorante italiano - reg. T7810262141749)
+  Luogo.........: n.d. sullo scontrino (Giappone)
+  Importo totale: 5.815 JPY
+  Data e ora....: 2026-07-17 23:00
+  Tipo di spesa.: Ristorante (coperto, crostini, carbonara, amaro, acqua)
+
+[18] scontrino_JP_18.jpg
+  Venditore.....: 海蔵 UMIZOU - JR駅西口店
+  Luogo.........: Utsunomiya (Tochigi), Odori 4-1-12
+  Importo totale: 5.673 JPY
+  Data e ora....: 2026-07-18 21:48
+  Tipo di spesa.: Ristorante / izakaya
+
+[19] scontrino_JP_19.jpg
+  Venditore.....: KAWARAYA - かわらや宇都宮店
+  Luogo.........: Utsunomiya (Tochigi), Ikegamicho 3-11 6F
+  Importo totale: 17.780 JPY
+  Data e ora....: 2026-07-11 22:11
+  Tipo di spesa.: Ristorante / izakaya
+
+[20] scontrino_JP_20.jpg
+  Venditore.....: KAWARAYA - かわらや宇都宮店
+  Luogo.........: Utsunomiya (Tochigi)
+  Importo totale: 17.780 JPY
+  Data e ora....: 2026-07-11 22:11
+  Tipo di spesa.: Ristorante / izakaya
+
+[21] scontrino_JP_21.jpg
+  Venditore.....: 九 (Kyu) 宇都宮駅西口店 - yakitori
+  Luogo.........: Utsunomiya (Tochigi), Odori 3-2-1
+  Importo totale: 2.190 JPY
+  Data e ora....: 2026-07-27 21:02
+  Tipo di spesa.: Ristorante (yakitori / izakaya)
+
+[22] scontrino_JP_22.jpg
+  Venditore.....: 健太餃子 東口店 (Kenta Gyoza)
+  Luogo.........: Utsunomiya (Tochigi), Higashi-Shukugo 1-9-1
+  Importo totale: 1.710 JPY
+  Data e ora....: 2026-07-13 20:46
+  Tipo di spesa.: Ristorante
+
+[23] scontrino_JP_23.jpg
+  Venditore.....: あなたのお店 (ristorante italiano - reg. T7810262141749)
+  Luogo.........: n.d. sullo scontrino (Giappone)
+  Importo totale: 8.315 JPY
+  Data e ora....: 2026-07-24 21:57
+  Tipo di spesa.: Ristorante (coperto, aglio e burro, peposo, amaro, acqua)
+
+[24] scontrino_JP_24.jpg
+  Venditore.....: 成城石井 Seijo Ishii - 宇都宮パセオ店
+  Luogo.........: Utsunomiya (Tochigi), c.c. Paseo
+  Importo totale: 860 JPY
+  Data e ora....: 2026-06-14 17:00
+  Tipo di spesa.: Supermercato
+
+[25] scontrino_JP_25.jpg
+  Venditore.....: トレジャーファクトリー (Treasure Factory) トナリエ宇都宮店
+  Luogo.........: Utsunomiya (Tochigi), Ekimae-dori 1-4-6
+  Importo totale: 4.457 JPY
+  Data e ora....: 2026-07-18 16:54
+  Tipo di spesa.: Negozio (usato / hobby - videogiochi, abbigliamento)
+
+[26] scontrino_JP_26.jpg
+  Venditore.....: HARD OFF - ハードオフ宇都宮駅東店
+  Luogo.........: Utsunomiya (Tochigi)
+  Importo totale: 6.680 JPY
+  Data e ora....: 2026-07-12 19:11
+  Tipo di spesa.: Negozio (usato / videogiochi)
+
+[27] scontrino_JP_27.jpg
+  Venditore.....: 若竹の杜 若山農場 (Wakayama Farm - Four Seasons Bamboo Forest)
+  Luogo.........: Utsunomiya (Tochigi), Takaragimotomachi 2018
+  Importo totale: 1.350 JPY
+  Data e ora....: 2026-06-14 10:35
+  Tipo di spesa.: Attrazione turistica / caffetteria (set matcha con ingresso)
+
+[28] scontrino_JP_28.jpg
+  Venditore.....: CAPCOM STORE Tokyo - カプコンストア トーキョー店
+  Luogo.........: Tokyo, Shibuya PARCO 6F
+  Importo totale: 2.640 JPY
+  Data e ora....: 2026-07-05 16:35
+  Tipo di spesa.: Negozio (merchandising)
+
+[29] scontrino_JP_29.jpg
+  Venditore.....: MEGA ドン・キホーテ (Don Quijote) 宇都宮店
+  Luogo.........: Utsunomiya (Tochigi)
+  Importo totale: 544 JPY
+  Data e ora....: 2026-07-25 18:54
+  Tipo di spesa.: Supermercato / discount (cancelleria)
+
+[30] scontrino_JP_30.jpg
+  Venditore.....: HARD OFF - ハードオフ宇都宮環状鶴田店
+  Luogo.........: Utsunomiya (Tochigi), Tsuruta
+  Importo totale: 9.240 JPY
+  Data e ora....: 2026-07-25 16:12
+  Tipo di spesa.: Negozio (usato / elettronica)
+
+[31] scontrino_JP_31.jpg
+  Venditore.....: 駿河屋 (Suruga-ya) - MEGAドン・キホーテ ラパーク宇都宮店
+  Luogo.........: Utsunomiya (Tochigi), Babadori 2-3-12, 6F
+  Importo totale: 10.813 JPY
+  Data e ora....: 2026-07-25 18:25
+  Tipo di spesa.: Negozio (usato / hobby - retrogaming)
+
+[32] scontrino_JP_32.jpg
+  Venditore.....: おかしのまちおか (Okashi no Machioka) 宇都宮パセオ店
+  Luogo.........: Utsunomiya (Tochigi), Kawamukocho 1-23
+  Importo totale: 2.072 JPY
+  Data e ora....: 2026-08-03 18:04
+  Tipo di spesa.: Negozio alimentari / dolciumi
+
+[33] scontrino_JP_33.jpg
+  Venditore.....: BOOKOFF PLUS 新宿駅西口店
+  Luogo.........: Tokyo, Shinjuku (uscita ovest stazione)
+  Importo totale: 880 JPY
+  Data e ora....: 2026-08-02 16:38
+  Tipo di spesa.: Negozio (libri / anime goods usati)
+
+[34] scontrino_JP_34.jpg
+  Venditore.....: 平禄寿司 HEIROKU SUSHI - 東京渋谷表参道店
+  Luogo.........: Tokyo, Shibuya-ku Jingumae 5-8-5
+  Importo totale: 7.568 JPY
+  Data e ora....: 2026-08-02 13:58
+  Tipo di spesa.: Ristorante (sushi)
+
+[35] scontrino_JP_35.jpg
+  Venditore.....: NewDays - ND宇都宮中央
+  Luogo.........: Utsunomiya (Tochigi)
+  Importo totale: 1.087 JPY
+  Data e ora....: 2026-07-19 20:11
+  Tipo di spesa.: Minimarket
+
+[36] scontrino_JP_36.jpg
+  Venditore.....: York Benimaru - ヨークベニマル 宇都宮テラス店
+  Luogo.........: Utsunomiya (Tochigi), Utsunomiya Terrace
+  Importo totale: 1.626 JPY
+  Data e ora....: 2026-07-23 17:46
+  Tipo di spesa.: Supermercato
+
+[37] scontrino_JP_37.jpg
+  Venditore.....: Yaoko Marketplace - ヤオコー トナリエ宇都宮店
+  Luogo.........: Utsunomiya (Tochigi), c.c. Tonarie
+  Importo totale: 3.032 JPY
+  Data e ora....: 2026-07-26 18:51
+  Tipo di spesa.: Supermercato
+
+[38] scontrino_JP_38.jpg
+  Venditore.....: 焼肉 PREMIUM KARUBI - FC宇都宮駅東
+  Luogo.........: Utsunomiya (Tochigi), Higashi-Shukugo 5-1-8
+  Importo totale: 5.258 JPY
+  Data e ora....: 2026-07-02 21:43
+  Tipo di spesa.: Ristorante (yakiniku)
+
+[39] scontrino_JP_39.jpg
+  Venditore.....: 海蔵 UMIZOU - JR駅西口店
+  Luogo.........: Utsunomiya (Tochigi), Odori 4-1-12
+  Importo totale: 5.343 JPY
+  Data e ora....: 2026-07-01 21:47
+  Tipo di spesa.: Ristorante / izakaya
+
+[40] scontrino_JP_40.jpg
+  Venditore.....: おかしのまちおか (Okashi no Machioka) ベルモール店
+  Luogo.........: Utsunomiya (Tochigi), Yoto 6-2-1 1F (Bell Mall)
+  Importo totale: 1.095 JPY
+  Data e ora....: 2026-08-04 19:07
+  Tipo di spesa.: Negozio alimentari / dolciumi
+
+[41] scontrino_JP_41.jpg
+  Venditore.....: あなたのお店 (ristorante italiano - reg. T7810262141749)
+  Luogo.........: n.d. sullo scontrino (Giappone)
+  Importo totale: 3.340 JPY
+  Data e ora....: 2026-06-26 21:40
+  Tipo di spesa.: Ristorante (coperto, carbonara, amaro)
+
+[42] scontrino_JP_42.jpg
+  Venditore.....: LAWSON - 宇都宮駅西口店
+  Luogo.........: Utsunomiya (Tochigi), Kawamukocho 1-23
+  Importo totale: 645 JPY
+  Data e ora....: 2026-06-21 20:35
+  Tipo di spesa.: Minimarket / convenience store
+
+[43] scontrino_JP_43.jpg
+  Venditore.....: KAWARAYA - かわらや宇都宮店
+  Luogo.........: Utsunomiya (Tochigi), Ikegamicho 3-11 6F
+  Importo totale: 17.780 JPY
+  Data e ora....: 2026-07-11 22:11
+  Tipo di spesa.: Ristorante / izakaya
+[44] scontrino_JP_44.jpg
+  Venditore.....: 健太餃子 東口店 (Kenta Gyoza)
+  Luogo.........: Utsunomiya (Tochigi), Higashi-Shukugo 1-9-1
+  Importo totale: 1.670 JPY
+  Data e ora....: 2026-06-28 20:34
+  Tipo di spesa.: Ristorante (gyoza)
+
+[45] scontrino_JP_45.jpg
+  Venditore.....: 焼肉グレート (Yakiniku Great) 駅前店
+  Luogo.........: Utsunomiya (Tochigi), Ekimae-dori 1-4-6
+  Importo totale: 8.850 JPY (subtotale 8.858, arrotondamento -8)
+  Data e ora....: 2026-06-20 22:31
+  Tipo di spesa.: Ristorante (yakiniku)
+
+[46] scontrino_JP_46.jpg
+  Venditore.....: bariSheep
+  Luogo.........: Utsunomiya (Tochigi), Miya-Mirai 1-1, Utsunomiya Terrace 2F-202
+  Importo totale: 3.894 JPY
+  Data e ora....: 2026-06-15 20:55
+  Tipo di spesa.: Ristorante / bistrot
+
+[47] scontrino_JP_47.jpg
+  Venditore.....: York Benimaru - ヨークベニマル 宇都宮テラス店
+  Luogo.........: Utsunomiya (Tochigi), Utsunomiya Terrace
+  Importo totale: 2.242 JPY
+  Data e ora....: 2026-06-14 17:16
+  Tipo di spesa.: Supermercato
+
+[48] scontrino_JP_48.jpg
+  Venditore.....: York Benimaru - ヨークベニマル 宇都宮テラス店
+  Luogo.........: Utsunomiya (Tochigi), Utsunomiya Terrace
+  Importo totale: 2.242 JPY
+  Data e ora....: 2026-06-14 17:16
+  Tipo di spesa.: Supermercato
+
+[49] scontrino_JP_49.jpg
+  Venditore.....: 日高屋 (Hidakaya) 640 宇都宮テラス
+  Luogo.........: Utsunomiya (Tochigi), Utsunomiya Terrace
+  Importo totale: 1.780 JPY
+  Data e ora....: 2026-06-27 21:12
+  Tipo di spesa.: Ristorante (ramen cinese)
+
+[50] scontrino_JP_50.jpg
+  Venditore.....: Di PUNTO - DiPUNTO宇都宮駅前店
+  Luogo.........: Utsunomiya (Tochigi), Ekimae-dori 1-4-6
+  Importo totale: 6.050 JPY
+  Data e ora....: 2026-06-13 23:22
+  Tipo di spesa.: Ristorante / wine bar
+
+[51] scontrino_JP_51.jpg
+  Venditore.....: PIYO PIZZA
+  Luogo.........: n.d. (solo slip carta di credito, tel. 090-7224-7014)
+  Importo totale: 3.700 JPY
+  Data e ora....: 2026-06-13 14:01
+  Tipo di spesa.: Ristorante (pizzeria)
+
+[52] scontrino_JP_52.jpg
+  Venditore.....: 海蔵 UMIZOU - JR駅西口店
+  Luogo.........: Utsunomiya (Tochigi), Odori 4-1-12
+  Importo totale: 5.849 JPY
+  Data e ora....: 2026-06-11 21:33
+  Tipo di spesa.: Ristorante / izakaya
+
+[53] scontrino_JP_53.jpg
+  Venditore.....: LAWSON - 宇都宮駅西口店
+  Luogo.........: Utsunomiya (Tochigi), Kawamukocho 1-23
+  Importo totale: 1.079 JPY
+  Data e ora....: 2026-06-08 17:51
+  Tipo di spesa.: Minimarket / convenience store
+
+[54] scontrino_JP_54.jpg
+  Venditore.....: 麺屋 りんく (Menya Rinku)
+  Luogo.........: Utsunomiya (Tochigi), Oyamachi 1263-2
+  Importo totale: 1.360 JPY
+  Data e ora....: 2026-06-14 13:18
+  Tipo di spesa.: Ristorante (ramen)

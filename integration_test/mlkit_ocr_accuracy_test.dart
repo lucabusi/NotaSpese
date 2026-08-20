@@ -13,7 +13,7 @@ import 'package:path_provider/path_provider.dart';
 ///
 /// Unlike `test/real_receipts_accuracy_test.dart` (which feeds the parser a
 /// HUMAN transcription of the photos), this suite runs the real
-/// `MlkitOcrService` on the 14 photos in `scontrini_training/` (bundled as
+/// `MlkitOcrService` on the 53 photos in `scontrini_training/` (bundled as
 /// assets, see the [OCR-HARNESS] block in pubspec.yaml) and measures:
 ///
 /// 1. OCR text accuracy: 1 - CER (character error rate, Levenshtein) against

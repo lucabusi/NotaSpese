@@ -16,11 +16,22 @@ import 'package:nota_spese/services/ocr/receipt_parser.dart';
 ///
 /// `fornitore` is scored against a LIST of acceptable renderings
 /// (`fornitore_accettabili`): on a real receipt the brand line, the branch
-/// line and the legal entity are all defensible vendor names for an expense.
+/// line and the legal entity are all defensible vendor names for an expense —
+/// and so is `brand + branch` on one line, which is both how some receipts
+/// print it and what OCR returns when it merges the two rows.
 ///
 /// No `linguaHint` is passed on purpose: the parser must recover the
 /// language from the text alone, as it does when the trip language is unset.
-const double _accuracyTarget = 0.80;
+///
+/// Companion suite: `real_receipts_noise_accuracy_test.dart` scores the same
+/// receipts after degrading them with ML Kit's own recognition errors, which
+/// is where this parser's robustness is actually measured — clean
+/// transcriptions saturate.
+
+/// The gate held at 0.80 while the parser was being built; every field of
+/// every receipt has been correct since 2026-08-20, so it now guards that
+/// level instead of the old floor.
+const double _accuracyTarget = 0.95;
 
 void main() {
   final dir = Directory('test/fixtures/real_receipts/jp');
@@ -63,8 +74,7 @@ void main() {
 
       final accettabili =
           (expected['fornitore_accettabili'] as List).cast<String>();
-      final okFornitore =
-          result.fornitore != null && accettabili.contains(result.fornitore);
+      final okFornitore = isAcceptableVendor(result.fornitore, accettabili);
 
       for (final ok in [okImporto, okData, okValuta, okFornitore]) {
         checks++;
@@ -92,4 +102,25 @@ void main() {
       reason: 'field-level accuracy below target\n$report',
     );
   });
+}
+
+/// Whether [vendor] is one of the [accettabili] renderings — or the two of
+/// them a receipt prints on consecutive letterhead rows, joined by a space.
+///
+/// OCR merges two printed rows into one whenever they overlap vertically, so
+/// `LAWSON` + `宇都宮駅西口店` legitimately comes back as
+/// `LAWSON 宇都宮駅西口店`: brand plus branch is exactly what other receipts
+/// print on a single row, and is a correct vendor for an expense. The halves
+/// must BOTH be acceptable on their own, so this never lets through a name
+/// glued to something that is not a name.
+bool isAcceptableVendor(String? vendor, List<String> accettabili) {
+  if (vendor == null) return false;
+  if (accettabili.contains(vendor)) return true;
+  for (final first in accettabili) {
+    for (final second in accettabili) {
+      if (identical(first, second)) continue;
+      if (vendor == '$first $second') return true;
+    }
+  }
+  return false;
 }
