@@ -12,7 +12,8 @@
 *.swp
 .buildlog/
 .history
-
+/scontrini_training/
+*.jpg
 
 
 # Flutter repo-specific
