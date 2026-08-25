@@ -14,6 +14,10 @@ void main() {
     expect(effectiveLinguaHint(null, 'JPY'), 'ja');
   });
 
+  test('null lingua + PLN currency infers pl', () {
+    expect(effectiveLinguaHint(null, 'PLN'), 'pl');
+  });
+
   test('null lingua + EUR currency stays null (auto)', () {
     expect(effectiveLinguaHint(null, 'EUR'), isNull);
   });

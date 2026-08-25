@@ -8,13 +8,14 @@ void main() {
     'ja': 'JPY',
     'sr': 'RSD',
     'de': 'EUR',
+    'pl': 'PLN',
   };
 
-  test('all 5 language profiles present', () {
-    expect(languageProfiles.keys.toSet(), {'it', 'en', 'ja', 'sr', 'de'});
+  test('all 6 language profiles present', () {
+    expect(languageProfiles.keys.toSet(), {'it', 'en', 'ja', 'sr', 'de', 'pl'});
   });
 
-  for (final code in ['it', 'en', 'ja', 'sr', 'de']) {
+  for (final code in ['it', 'en', 'ja', 'sr', 'de', 'pl']) {
     test('profile "$code" has non-empty keywords/patterns/format', () {
       final profile = languageProfiles[code]!;
       expect(profile.code, code);

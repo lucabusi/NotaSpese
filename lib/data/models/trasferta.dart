@@ -34,7 +34,7 @@ class Trasferta {
   final DateTime dataInizio;
   final DateTime? dataFine; // NULL = in corso
   final String valutaDefault; // ISO 4217
-  final String? linguaDefault; // it|en|ja|sr|de, NULL = auto
+  final String? linguaDefault; // it|en|ja|sr|de|pl, NULL = auto
   final bool archiviata;
   final String? note;
   final DateTime createdAt;

@@ -13,6 +13,9 @@ void main() {
     expect(MlkitOcrService.scriptFor('it'), TextRecognitionScript.latin);
     expect(MlkitOcrService.scriptFor('en'), TextRecognitionScript.latin);
     expect(MlkitOcrService.scriptFor('sr'), TextRecognitionScript.latin);
+    // Polish is latin-script: the diacritics (ł, ą, ę, ż) come from the same
+    // ML Kit latin model, so there is nothing to switch.
+    expect(MlkitOcrService.scriptFor('pl'), TextRecognitionScript.latin);
     expect(MlkitOcrService.scriptFor(null), TextRecognitionScript.latin);
   });
 }

@@ -28,16 +28,29 @@ String normalizeOcrText(String text) {
       buffer.writeCharCode(rune);
     }
   }
-  // [FIX] ML Kit splits thousands groups after the comma (`¥1, 489`):
-  // rejoin only when exactly 3 digits follow, so decimal commas
-  // (`1, 50`) are left alone.
-  return buffer.toString().replaceAllMapped(
-        _splitThousands,
-        (m) => '${m.group(1)},${m.group(2)}',
-      );
+  return _rejoinSpacedThousands(_rejoinThousands(buffer.toString()));
 }
 
-final RegExp _splitThousands = RegExp(r'(\d),\s+(\d{3})\b');
+/// Polish (and continental) POS printers separate thousands with a space
+/// (`1 234,56`), which would otherwise split into two tokens and hand back
+/// the last group as the amount. Only a single space, a full 3-digit group
+/// and a 2-decimal tail are rejoined, so a quantity column (`2  320,00`,
+/// aligned with several spaces) is left alone.
+String _rejoinSpacedThousands(String text) =>
+    text.replaceAllMapped(_spacedThousands, (m) => '${m.group(1)}${m.group(2)}');
+
+final RegExp _spacedThousands =
+    RegExp(r'(?<![\d.,])(\d{1,3}) (\d{3})(?=,\d\d(?!\d))');
+
+/// [FIX] ML Kit breaks a thousands group with a space wherever the split
+/// lands (`¥1, 489`, `¥6,0 50`): rejoin only when exactly 3 digits follow the
+/// comma, so decimal commas (`1, 50`) are left alone.
+String _rejoinThousands(String text) => text.replaceAllMapped(
+      _splitThousands,
+      (m) => '${m.group(1)},${m.group(2)!.replaceAll(_spaceChar, '')}',
+    );
+
+final RegExp _splitThousands = RegExp(r'(\d),((?:\s*\d){3})(?!\d)');
 
 /// ML Kit's japanese model systematically reads the `¥` glyph as a `4`
 /// attached to the amount (`¥6,775` → `46,775`, misura su foto reali
@@ -51,6 +64,29 @@ String fixYenGlyphs(String text) => text.replaceAllMapped(
     );
 
 final RegExp _yenAsFour = RegExp(r'(?<![0-9¥.,])4(\d{1,3}(?:,\d{3})+)');
+
+/// Repairs the glyphs ML Kit's japanese model substitutes INSIDE an amount
+/// (misura on-device 2026-08-25, 53 scontrini): the `¥` sign read as `$`
+/// (`カルパッチョ $2,178`), `1` read as `l`/`I` and `0` read as `O`/`o`
+/// (`合計 ¥l, O95`, `¥1,78O`). A letter counts as a digit only when digits,
+/// separators or the currency sign surround it, so a register id (`REGO2`)
+/// and a slip number (`No O 0 2`) keep their letters.
+///
+/// Only called for CJK text (see [ReceiptParser.parse]): on latin receipts
+/// `$` is a real currency and `O`/`l` are real letters.
+String repairJaDigits(String text) => _rejoinThousands(
+      text
+          .replaceAll(_dollarAsYen, '¥')
+          .replaceAllMapped(
+            _digitLookalike,
+            (m) => m.group(0) == 'l' || m.group(0) == 'I' ? '1' : '0',
+          ),
+    );
+
+final RegExp _dollarAsYen = RegExp(r'\$(?=\s?\d)');
+
+final RegExp _digitLookalike =
+    RegExp(r'(?<=[0-9,.¥]\s?)([lIOo])(?=\s?[0-9,.]|[^A-Za-z0-9]|$)');
 
 /// Line with every space removed, so keyword matching survives the
 /// letter-spacing receipts use for emphasis (`合  計`, `小 計 額`).
@@ -92,6 +128,47 @@ double? parseAmountToken(String token, AmountNumberFormat format) {
   return (compact: buffer.toString().toLowerCase(), origIndex: origIndex);
 }
 
+/// Whether [keyword] belongs to a script that separates words with spaces
+/// (latin, cyrillic), so a match inside a longer word is not a match at all.
+/// Japanese labels are exempt: `合計` glues to its neighbours by design, and
+/// the whole compacted-line matching exists for them.
+bool _isWordBoundedKeyword(String keyword) => !_anyCjk.hasMatch(keyword);
+
+/// Whether the keyword occupying `[start, end)` of the ORIGINAL [line] stands
+/// on its own word: spaces are gone from the compacted text, so without this
+/// check the polish `suma` matches inside the italian `conSUMAzione` and hands
+/// the receipt to the wrong profile. Digits do not break a word (`SUMA45,00`
+/// is a legitimate merge), letters do.
+bool _hasWordBoundary(String line, int start, int end) {
+  if (start > 0 && _anyLetter.hasMatch(line[start - 1])) return false;
+  if (end < line.length && _anyLetter.hasMatch(line[end])) return false;
+  return true;
+}
+
+final RegExp _anyLetter = RegExp(r'\p{L}', unicode: true);
+
+/// Start offsets, in `c.compact`, of every occurrence of [keyword] that is a
+/// real match on [line] (see [_hasWordBoundary]).
+List<int> _keywordHits(
+  String line,
+  ({String compact, List<int> origIndex}) c,
+  String keyword,
+) {
+  if (keyword.isEmpty) return const [];
+  final bounded = _isWordBoundedKeyword(keyword);
+  final hits = <int>[];
+  for (var at = c.compact.indexOf(keyword); at >= 0;
+      at = c.compact.indexOf(keyword, at + 1)) {
+    if (bounded &&
+        !_hasWordBoundary(
+            line, c.origIndex[at], c.origIndex[at + keyword.length - 1] + 1)) {
+      continue;
+    }
+    hits.add(at);
+  }
+  return hits;
+}
+
 /// Value belonging to [keyword] on `lines[index]`, or `null` when that line
 /// carries no total for it.
 ///
@@ -115,21 +192,19 @@ double? _valueForKeyword(
 ) {
   final line = lines[index];
   final c = _compact(line);
-  if (!c.compact.contains(keyword)) return null;
+  final hits = _keywordHits(line, c, keyword);
+  if (hits.isEmpty) return null;
 
   final negatives = <({int start, int end})>[];
   for (final negative in profile.negativeKeywords) {
     final n = _stripSpaces(negative).toLowerCase();
-    if (n.isEmpty) continue;
-    for (var at = c.compact.indexOf(n); at >= 0;
-        at = c.compact.indexOf(n, at + 1)) {
+    for (final at in _keywordHits(line, c, n)) {
       negatives.add((start: at, end: at + n.length));
     }
   }
 
   double? best;
-  for (var ks = c.compact.indexOf(keyword); ks >= 0;
-      ks = c.compact.indexOf(keyword, ks + 1)) {
+  for (final ks in hits) {
     final ke = ks + keyword.length;
     if (negatives.any((n) => n.start < ke && n.end > ks)) continue;
 
@@ -153,9 +228,7 @@ double? _valueForKeyword(
     return null;
   }
   if (index + 1 < lines.length &&
-      !_containsAny(
-          _stripSpaces(lines[index + 1]).toLowerCase(),
-          profile.negativeKeywords)) {
+      !_containsAny(lines[index + 1], profile.negativeKeywords)) {
     return _rightmostValue(lines[index + 1], profile.numberFormat);
   }
   return null;
@@ -189,6 +262,14 @@ bool _isCodeTail(String line, RegExpMatch match) =>
     _latinLetter.hasMatch(line[match.start - 1]) &&
     !_isYenGlyphLetter(line, match.start - 1);
 
+/// Whether [match] is an amount whose leading digits ML Kit lost, leaving the
+/// thousands separator at the front (`合計 キ,780` where the receipt prints
+/// `合計 ¥17,780`, misura on-device 2026-08-25): what is left is only the last
+/// group of the real number, so taking it would under-report the total by an
+/// order of magnitude. Better no value from this keyword — the next keyword,
+/// or the fallback, still sees the intact copies printed elsewhere.
+bool _isMutilatedAmount(RegExpMatch match) => match.group(0)!.startsWith(',');
+
 /// Whether [match] is one half of a clock reading (`17:38`): the amount
 /// extractor must not mistake a printed time for a total. A colon that merely
 /// separates a label from its value (`合計:1,234`) is not a clock, hence the
@@ -210,14 +291,21 @@ double? _rightmostValue(String line, AmountNumberFormat format) {
     if (_isPercentToken(line, matches[i])) continue;
     if (_isCodeTail(line, matches[i])) continue;
     if (_isClockToken(line, matches[i])) continue;
+    if (_isMutilatedAmount(matches[i])) continue;
     final v = parseAmountToken(matches[i].group(0)!, format);
     if (v != null) return v;
   }
   return null;
 }
 
-bool _containsAny(String lowerLine, List<String> keywords) =>
-    keywords.any((k) => lowerLine.contains(k.toLowerCase()));
+/// Whether [line] carries any of [keywords], with the same word-boundary
+/// rule the extraction uses (see [_keywordHits]): `tel` must not match
+/// inside `Hotel`, which on a hotel bill is the very line carrying the total.
+bool _containsAny(String line, List<String> keywords) {
+  final c = _compact(line);
+  return keywords.any(
+      (k) => _keywordHits(line, c, _stripSpaces(k).toLowerCase()).isNotEmpty);
+}
 
 /// Keyword-tier pass of [extractAmount]: the total amount found on a line
 /// matching one of [profile]'s total keywords (or the following line, OCR
@@ -282,16 +370,15 @@ double? _roundingAdjustment(String text, LanguageProfile profile) {
 /// keywords, used when no total keyword line yields a value.
 double? _amountViaFallback(String text, LanguageProfile profile) {
   final lines = text.split('\n');
-  final lowerLines =
-      lines.map((l) => _stripSpaces(l).toLowerCase()).toList();
 
   double? maxPlausible;
   for (var i = 0; i < lines.length; i++) {
-    if (_containsAny(lowerLines[i], profile.negativeKeywords)) continue;
+    if (_containsAny(lines[i], profile.negativeKeywords)) continue;
     for (final match in _numberToken.allMatches(lines[i])) {
       if (_isPercentToken(lines[i], match)) continue;
       if (_isCodeTail(lines[i], match)) continue;
       if (_isClockToken(lines[i], match)) continue;
+      if (_isMutilatedAmount(match)) continue;
       final v = parseAmountToken(match.group(0)!, profile.numberFormat);
       if (v != null &&
           v > 0 &&
@@ -375,6 +462,13 @@ DateTime? extractDate(String text, LanguageProfile profile, {DateTime? now}) {
 }
 
 final RegExp _vendorZipPattern = RegExp(r'\d{5}');
+/// Polish postcode (`00-950 Warszawa`): five digits, but split by a hyphen,
+/// so [_vendorZipPattern] never sees it.
+final RegExp _vendorZipPlPattern = RegExp(r'(?<!\d)\d{2}-\d{3}(?!\d)');
+/// Polish street prefixes — `ul.` (ulica), `al.` (aleja), `os.` (osiedle),
+/// `pl.` (plac) — printed right under the shop name on a paragon.
+final RegExp _vendorStreetPrefix =
+    RegExp(r'^(?:ul|al|os|pl)\.', caseSensitive: false);
 final RegExp _vendorPIvaPattern = RegExp(r'p\.?\s?iva');
 final RegExp _vendorTelPattern = RegExp(r'\btel\b|\btelefono\b|\btelephone\b|\bphone\b');
 final RegExp _vendorUrlPattern = RegExp(r'www\.|http');
@@ -382,10 +476,16 @@ final RegExp _vendorLetterPattern = RegExp(r'\p{L}', unicode: true);
 
 /// Slip/document-type headers printed above the merchant name (receipt,
 /// credit-card sales slip, customer copy, …) — never a vendor name.
+/// `頁収` is ML Kit misreading 領収 on the header glyph (misura on-device
+/// 2026-08-25), the same kind of fixed-phrase misread as `カ盟店` for 加盟店.
 final RegExp _vendorDocTypePattern = RegExp(
-  r'領収書|領収証|レシート|売上票|利用票|お買上票|お客様控|お客さま控|控え|'
+  r'領収書|領収証|頁収|レシート|売上票|利用票|お買上票|お客様控|お客さま控|控え|'
   r'明細|クレジットカード|クレジット売上|receipt|invoice|customer copy|'
-  r'credit card|sales slip',
+  r'credit card|sales slip|'
+  // Polish document headers: `PARAGON FISKALNY` (fiscal receipt),
+  // `RACHUNEK` (bill), `FAKTURA` (invoice). Matched on the space-stripped
+  // line, hence no space in the alternatives.
+  r'paragon|rachunek|faktura',
 );
 
 /// End of a document-type header, so a name merged after it can be recovered
@@ -439,6 +539,8 @@ bool _isVendorNoiseLine(String rawLine) {
   final line = rawLine.replaceFirst(_vendorLeadingDust, '');
   final lower = _stripSpaces(line).toLowerCase();
   if (_vendorZipPattern.hasMatch(lower)) return true;
+  if (_vendorZipPlPattern.hasMatch(lower)) return true;
+  if (_vendorStreetPrefix.hasMatch(line.trimLeft())) return true;
   if (_vendorPIvaPattern.hasMatch(lower)) return true;
   if (_vendorTelPattern.hasMatch(line.toLowerCase())) return true;
   if (_vendorUrlPattern.hasMatch(lower)) return true;
@@ -455,9 +557,10 @@ bool _isVendorNoiseLine(String rawLine) {
   // A priced line is an item, never the letterhead.
   if (_vendorPricedLinePattern.hasMatch(line)) return true;
   if (!_vendorLetterPattern.hasMatch(line)) return true;
-  // Vendor names never contain `#`: on real photos it shows up in garbled
-  // logo lines (`HARD-oF#`, misura 2026-07-22) printed above the clean name.
-  if (line.contains('#')) return true;
+  // Vendor names never contain `#` or `|`: on real photos they show up in
+  // garbled logo lines (`HARD-oF#`, `日高屋バイト |検索`) printed above the
+  // clean name.
+  if (_vendorGarbleMark.hasMatch(line)) return true;
   return false;
 }
 
@@ -494,6 +597,7 @@ bool _isBadSalvage(String fragment) =>
     fragment.length < 2 ||
     !_vendorLetterPattern.hasMatch(fragment) ||
     _vendorCodeOnlyPattern.hasMatch(fragment) ||
+    _isGarbledVendor(fragment) ||
     _isVendorNoiseLine(fragment);
 
 String? _vendorBeforeField(String line) {
@@ -503,15 +607,83 @@ String? _vendorBeforeField(String line) {
   return _isBadSalvage(head) ? null : head;
 }
 
-final RegExp _vendorLeadingDust = RegExp(r'^[·・.,、。:;\-–—\s]+');
+/// The merchant name printed in front of a document-type header on the same
+/// row (`MEGA 領収書`): the mirror of [_vendorAfterCourtesy], for the receipts
+/// that put the brand first and the header second.
+///
+/// The two halves must be separated by a space or a bracket, which is what a
+/// row merge leaves between them. Without that guard the cut lands inside a
+/// single printed phrase and hands back its opening words as a name
+/// (`クレジットお買上票` → `クレジット`, `お買上げ明細` → `お買上げ`).
+String? _vendorBeforeDocType(String line) {
+  final match = _vendorDocTypePattern.firstMatch(line);
+  if (match == null || match.start == 0) return null;
+  if (!_vendorMergeSeam.hasMatch(line[match.start - 1])) return null;
+  final head = _cleanVendor(line.substring(0, match.start));
+  return _isBadSalvage(head) ? null : head;
+}
+
+final RegExp _vendorMergeSeam = RegExp(r'[\s　·・:：\-–—\[［<＜（(]');
+
+// Brackets, asterisks and reference marks are print decoration around the
+// letterhead, and ML Kit keeps whichever half of them it managed to read
+// (`*おかしのまちおか`, `」KAWARAYA`, `「ハードオフ…`, misura 2026-08-25).
+final RegExp _vendorLeadingDust =
+    RegExp(r'^[·・.,、。:;\-–—*＊※「」『』【】［］\[\]<>＜＞\s]+');
 final RegExp _vendorKanaHyphen = RegExp(r'(?<=[ァ-ヺ])-(?=[ァ-ヺ])');
 // A run, not a single glyph: ML Kit reads every O of `BOOKOFF` as 口, so the
-// inner ones have no latin neighbour on both sides (misura 2026-08-20).
-final RegExp _vendorLatinKuchi = RegExp(r'(?<=[A-Za-z])口+(?=[A-Za-z])');
+// inner ones have no latin neighbour on both sides (misura 2026-08-20). The
+// same O also comes back as a digit zero (`B0OKOFF`, misura 2026-08-25).
+final RegExp _vendorLatinKuchi = RegExp(r'(?<=[A-Za-z])[口0]+(?=[A-Za-z])');
 // Any CJK, not just katakana, and tolerating the punctuation dust that can
-// land between the two (`K·ハードオフ…`).
-final RegExp _vendorStrayLatin =
-    RegExp(r'^[A-Za-z][·・]?(?=[ぁ-ゟァ-ヺ一-鿿])');
+// land between the two (`K·ハードオフ…`). A single hiragana in front of a
+// katakana name is the same artifact from a kana logo (`でヨークベニマル`).
+final RegExp _vendorStrayLatin = RegExp(
+  r'^(?:[A-Za-z][·・]?(?=[ぁ-ゟァ-ヺ一-鿿])|[ぁ-ゟ](?=[ァ-ヺ][ァ-ヿ]))',
+);
+
+/// Script combinations no printed shop name contains, which is how ML Kit
+/// renders the stylized LOGO line while the plain name printed under it comes
+/// out clean (misura on-device 2026-08-25, 53 scontrini): latin glued to a
+/// hiragana (`UMIZじ`, `UMMIZCじ`), a run of CJK inside a latin word
+/// (`LAW日口N`), or a single latin letter stuck to the end of a CJK run
+/// (`平禄寿言a`). Latin next to KANJI is NOT a marker — real names mix them
+/// (`ND宇都宮中央`, `海蔵JR駅西口店`, `DiPUNTO宇都宮駅前店`) — and the checks run
+/// on the already-repaired candidate, so `LAWS口N` is `LAWSON` by then.
+final RegExp _vendorScriptSalad = RegExp(
+  r'[A-Za-z][ぁ-ゟ]|[ぁ-ゟ][A-Za-z]|'
+  r'(?<=[A-Za-z])[一-鿿]+(?=[A-Za-z])|'
+  r'(?<=[ぁ-ゟァ-ヺ一-鿿])[A-Za-z](?![A-Za-z])',
+);
+
+/// Whether [value] is a logo whose case ML Kit broke (`BOOK-oF PLUS+`): a
+/// word STARTING with a lowercase letter immediately followed by an uppercase
+/// one, inside a line that is otherwise upper-case. The lowercase must open
+/// the word, because a brand may well carry one inside it (`DiPUNTO宇都宮駅前店`),
+/// and the majority-uppercase test spares the brands that are lowercase by
+/// design (`bariSheep`, `NewDays`).
+bool _isGarbledCaps(String value) {
+  final letters = _latinLetterAll.allMatches(value).map((m) => m.group(0)!);
+  if (letters.length < 3) return false;
+  final upper = letters.where((c) => c == c.toUpperCase()).length;
+  if (upper * 2 <= letters.length) return false;
+  return _lowerThenUpper.hasMatch(value);
+}
+
+final RegExp _anyCjk = RegExp(r'[぀-ヿ一-鿿]');
+
+/// A latin word standing on its own in front of the CJK name (`STORE
+/// カプコンストアトーキョー店`): that is the rest of the LOGO glued on by a row
+/// merge, not the plain store-name line. A brand written into the name with no
+/// space (`DiPUNTO宇都宮駅前店`, `ND宇都宮中央`) is the name itself.
+final RegExp _vendorMergedLatinHead = RegExp(r'^[A-Za-z][A-Za-z.\-]*\s');
+final RegExp _latinLetterAll = RegExp(r'[A-Za-z]');
+final RegExp _lowerThenUpper = RegExp(r'(?<![A-Za-z])[a-z][A-Z]');
+
+/// Whether [value] is a name ML Kit garbled beyond use, so the next candidate
+/// line is the better bet.
+bool _isGarbledVendor(String value) =>
+    _vendorScriptSalad.hasMatch(value) || _isGarbledCaps(value);
 /// A line carrying a price (`ゲームソフト ¥1,800込`, `お通し 398円`): it is an
 /// item row, so it is never the letterhead — a guard for the case where the
 /// merchant line has been merged away entirely.
@@ -527,8 +699,10 @@ final RegExp _vendorTrailingRule = RegExp(r'[\s]*[-–—─=＝*＊]{3,}[\s]*$'
 final RegExp _vendorCodeOnlyPattern =
     RegExp(r'^(?=.*[A-Z])(?=.*\d)[A-Z0-9_.\-]{2,6}$');
 // Anywhere, not just at the end: after a row merge the garbled logo sits in
-// front of the name it was merged with (`HARD·OFF# ·ハードオフ…`).
-final RegExp _vendorGarbleMark = RegExp(r'[#＃]+');
+// front of the name it was merged with (`HARD·OFF# ·ハードオフ…`). The vertical
+// bar comes from the border of a graphic printed on the receipt (the search
+// box of `日高屋バイト |検索`, misura 2026-08-25) and is never in a name.
+final RegExp _vendorGarbleMark = RegExp(r'[#＃|｜]+');
 /// Punctuation dust — and the stray logo letter that comes with it — at the
 /// start of the second half of a merged row (`CAPCOM ·STORE`,
 /// `HARD·OFF K·ハードオフ…`), where [_vendorLeadingDust] cannot reach.
@@ -548,7 +722,8 @@ final RegExp _vendorTrailingStray = RegExp(r'\s+[A-Za-z]$');
 final RegExp _vendorFieldStart = RegExp(
   r'〒|登録番号|登録事業者番号|事業者番号|端末番号|端末取引|伝票番号|'
   r'店コード|本社|レジ|担当|スタッフ|係員|承認番号|会員番号|取引No|'
-  r'電話|☎|\btel\b|https?://|www\.|'
+  // `NIP` is the polish VAT id, printed under the shop name on every paragon.
+  r'電話|☎|\btel\b|\bnip\b|https?://|www\.|'
   r'[^\s]{2,3}[都道府県][^\s]{0,6}[市区郡]|'
   r'\d{2,4}[-−]\d{2,4}[-−]\d{4}|'
   // The store-policy sentence printed under the letterhead
@@ -637,20 +812,47 @@ String? extractVendor(String text) {
   final labelled = _vendorFromLabel(lines);
   if (labelled != null) return _cleanVendor(labelled);
   final window = lines.take(6).toList();
+  String? first;
+  var firstIsWholeLine = false;
   for (final line in window) {
-    if (_isVendorNoiseLine(line)) {
-      // A merged row keeps the name next to whatever made the line noisy:
-      // take the head in front of a metadata field, or the tail after a
-      // courtesy sentence, rather than skipping the name altogether.
-      final salvaged = _vendorBeforeField(line) ?? _vendorAfterCourtesy(line);
-      if (salvaged != null) return salvaged;
+    final whole = !_isVendorNoiseLine(line);
+    final candidate = whole
+        // Even a line that is not noise as a whole may carry a merged field
+        // after the name (`DiPUNTO宇都宮駅前店  028-600-3888`): keep the head.
+        ? _vendorBeforeField(line) ?? _cleanVendor(line)
+        // A merged row keeps the name next to whatever made the line noisy:
+        // take the head in front of a metadata field or a document-type
+        // header, or the tail after a courtesy sentence, rather than skipping
+        // the name altogether.
+        : _vendorBeforeField(line) ??
+            _vendorBeforeDocType(line) ??
+            _vendorAfterCourtesy(line);
+    // A logo ML Kit garbled is worse than the plain name on the next line.
+    if (candidate == null ||
+        candidate.isEmpty ||
+        _isGarbledVendor(candidate)) {
       continue;
     }
-    // Even a line that is not noise as a whole may carry a merged field after
-    // the name (`DiPUNTO宇都宮駅前店  028-600-3888`): keep only the head.
-    final cleaned = _vendorBeforeField(line) ?? _cleanVendor(line);
-    if (cleaned.isNotEmpty) return cleaned;
+    if (first == null) {
+      first = candidate;
+      firstIsWholeLine = whole;
+      continue;
+    }
+    // The letterhead prints a stylized LOGO first and the store name under it
+    // in the receipt's plain font, which ML Kit reads far more reliably: when
+    // the logo is latin-only and the name below carries CJK, the name below
+    // wins (`HARD-OF` → `ハードオフ宇都宮駅東店`, misura on-device 2026-08-25).
+    // A first candidate salvaged out of a merged row is not a logo, so it
+    // keeps its precedence (`MEGA 領収書` → `MEGA`).
+    if (firstIsWholeLine &&
+        !_anyCjk.hasMatch(first) &&
+        _anyCjk.hasMatch(candidate) &&
+        !_vendorMergedLatinHead.hasMatch(candidate)) {
+      return candidate;
+    }
+    return first;
   }
+  if (first != null) return first;
   // Last resort: every candidate was noise, which on these receipts means the
   // only name printed is the garbled logo line (`bariSheep#`). A repaired
   // logo beats no vendor at all.
@@ -665,15 +867,24 @@ String? extractVendor(String text) {
 final RegExp _chfPattern = RegExp(r'\bCHF\b', caseSensitive: false);
 final RegExp _rsdPattern = RegExp(r'дин\.?|\bdin\b|\bRSD\b', caseSensitive: false);
 
+/// The złoty sign, which only ever follows the amount (`59,50 zł`). The `ł`
+/// is a thin glyph ML Kit renders as a plain `l` on POS fonts, so the digit
+/// in front is what tells the currency from an ordinary word ending in `zl`.
+/// `\b` is useless here — Dart's `\w` is ASCII, so it never sees `ł` as a
+/// letter — hence the explicit "not followed by a letter" guard.
+final RegExp _plnPattern =
+    RegExp(r'\bPLN\b|(?<=\d)\s?z[łl](?![a-z])', caseSensitive: false);
+
 /// Infers the ISO 4217 currency from an explicit symbol/code found in raw
-/// OCR [text] (€, £, $, CHF, дин./din/RSD, ¥/円). Returns `null` if none is
-/// present, so the caller falls back to the winning profile's default.
+/// OCR [text] (€, £, $, CHF, дин./din/RSD, zł/PLN, ¥/円). Returns `null` if
+/// none is present, so the caller falls back to the winning profile's default.
 String? inferCurrencyFromText(String text) {
   if (text.contains('€')) return 'EUR';
   if (text.contains('£')) return 'GBP';
   if (text.contains('\$')) return 'USD';
   if (_chfPattern.hasMatch(text)) return 'CHF';
   if (_rsdPattern.hasMatch(text)) return 'RSD';
+  if (_plnPattern.hasMatch(text)) return 'PLN';
   if (text.contains('¥') || text.contains('円')) return 'JPY';
   return null;
 }
@@ -698,11 +909,18 @@ int _scoreProfile(
   }
   if (data != null) score += 1;
   if (fornitore != null) score += 1;
-  final lower = _stripSpaces(text).toLowerCase();
-  if (profile.totalKeywords
-      .any((k) => lower.contains(_stripSpaces(k).toLowerCase()))) {
-    score += 1;
-  }
+  // Per line, and with the same word-boundary rule as the extraction: the
+  // bonus must not be handed out for a keyword found inside a longer word.
+  final lines = text.split('\n');
+  final compacted = [for (final line in lines) _compact(line)];
+  final hasKeyword = profile.totalKeywords.any((k) {
+    final kw = _stripSpaces(k).toLowerCase();
+    for (var i = 0; i < lines.length; i++) {
+      if (_keywordHits(lines[i], compacted[i], kw).isNotEmpty) return true;
+    }
+    return false;
+  });
+  if (hasKeyword) score += 1;
   return score;
 }
 
@@ -734,8 +952,8 @@ List<String> _candidateOrder(String text, String? linguaHint) {
 class ReceiptParser {
   ParsedReceipt parse(String rawText, {String? linguaHint}) {
     var text = normalizeOcrText(rawText);
-    // Yen-glyph repair only makes sense on japanese receipts.
-    if (detectScript(text) == 'ja') text = fixYenGlyphs(text);
+    // Glyph repair only makes sense on japanese receipts.
+    if (detectScript(text) == 'ja') text = fixYenGlyphs(repairJaDigits(text));
     try {
       final fornitore = extractVendor(text);
       String? bestCode;

@@ -1,9 +1,14 @@
+/// Currencies whose country maps to exactly one receipt language, used to
+/// infer the hint when the trip has none. `JPY` also switches ML Kit to the
+/// japanese recognizer; `PLN` does not (polish is latin-script) but still
+/// puts the polish profile first in the parser's language vote, which is
+/// what decides the total on a degraded `paragon fiskalny`.
+/// Other currencies stay on auto (null): `EUR`/`USD` span several
+/// languages, and serbian Cyrillic is deliberately routed to Claude.
+const Map<String, String> _linguaPerValuta = {'JPY': 'ja', 'PLN': 'pl'};
+
 /// Effective OCR language hint for a trip: an explicit `linguaDefault`
 /// always wins. When absent (older trips predate the field, or the user
-/// left it on auto) infer from the trip's currency — `JPY` is the only
-/// mapping worth having, since it is the one currency-tied script ML Kit
-/// has a dedicated recognizer for. Other currencies (including the
-/// Serbian/Cyrillic case, which ML Kit cannot render at all and is
-/// deliberately routed to Claude instead) stay on auto (null).
+/// left it on auto) infer from the trip's currency (see [_linguaPerValuta]).
 String? effectiveLinguaHint(String? linguaDefault, String? valutaDefault) =>
-    linguaDefault ?? (valutaDefault == 'JPY' ? 'ja' : null);
+    linguaDefault ?? _linguaPerValuta[valutaDefault];

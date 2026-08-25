@@ -37,7 +37,8 @@ class LanguageProfile {
   final List<String> roundingKeywords;
   final List<ReceiptDatePattern> datePatterns;
   final AmountNumberFormat numberFormat;
-  final String? defaultCurrency; // ja→JPY, sr→RSD, de→EUR, it→EUR, en→null
+  final String? defaultCurrency;
+  // ja→JPY, sr→RSD, de→EUR, it→EUR, pl→PLN, en→null
 }
 
 final RegExp _dmySlashOrDash = RegExp(r'\b(\d{1,2})[/-](\d{1,2})[/-](\d{4})\b');
@@ -48,7 +49,9 @@ final RegExp _dmyDot = RegExp(r'\b(\d{1,2})\.(\d{1,2})\.(\d{4})\b');
 final RegExp _jaKanjiDate =
     RegExp(r'(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日');
 final RegExp _jaSlashDate = RegExp(r'\b(\d{4})/(\d{1,2})/(\d{1,2})\b');
-final RegExp _isoDashDate = RegExp(r'\b(\d{4})-(\d{1,2})-(\d{1,2})\b');
+// The hyphen is a thin glyph ML Kit sometimes prints twice (`2026-07--24`,
+// misura on-device 2026-08-25).
+final RegExp _isoDashDate = RegExp(r'\b(\d{4})-{1,2}(\d{1,2})-{1,2}(\d{1,2})\b');
 // Second-hand/POS terminals print the year with two digits (`売上 26/07/25`,
 // misura su foto reali 2026-08-20, scontrino 駿河屋). Japanese receipts are
 // always year-first, so `yy/mm/dd` is unambiguous here — unlike the latin
@@ -148,6 +151,60 @@ final Map<String, LanguageProfile> languageProfiles = {
     datePatterns: [ReceiptDatePattern(_dmyDot, 'dmy')],
     numberFormat: AmountNumberFormat.commaDecimal,
     defaultCurrency: 'EUR',
+  ),
+  'pl': LanguageProfile(
+    code: 'pl',
+    // Most specific first, as in the japanese profile: a `paragon fiskalny`
+    // prints the VAT total (`SUMA PTU`) right above the real one
+    // (`SUMA PLN`), so the currency-qualified labels must outrank the bare
+    // `suma`/`razem`. `do zapłaty` (what is actually due, i.e. net of any
+    // discount) outranks both, and its diacritic-less twin is there because
+    // ML Kit reads `ł` as `l` on POS fonts.
+    totalKeywords: [
+      'suma pln',
+      'razem pln',
+      'kwota pln',
+      'do zapłaty',
+      'do zaplaty',
+      'razem',
+      'suma',
+      'łącznie',
+      'lacznie',
+      'kwota',
+    ],
+    // `ptu` is the polish VAT label: it kills `SUMA PTU` without touching
+    // `SUMA PLN`, because a keyword only owns the numbers printed before the
+    // next negative label on its own line. `gotówka`/`reszta` are the cash
+    // tendered and the change, never the total.
+    negativeKeywords: [
+      // Subtotals, which both contain `suma`: the keyword only loses to a
+      // negative that overlaps it (`podsuma`) or that follows it on the same
+      // line (`suma częściowa`), so the real `SUMA` line still wins.
+      'podsuma',
+      'częściowa',
+      'czesciowa',
+      'ptu',
+      'vat',
+      'podatek',
+      'stawka',
+      'zwolniona',
+      'reszta',
+      'gotówka',
+      'gotowka',
+      'rabat',
+      'w tym',
+      'nip',
+      'tel',
+    ],
+    // Polish receipts print the fiscal date ISO-first (`2026-07-14`); the
+    // dotted and slashed day-first forms show up on non-fiscal slips.
+    datePatterns: [
+      ReceiptDatePattern(_isoDashDate, 'ymd'),
+      ReceiptDatePattern(_dmyDot, 'dmy'),
+      ReceiptDatePattern(_dmySlashOrDash, 'dmy'),
+    ],
+    numberFormat: AmountNumberFormat.commaDecimal,
+    defaultCurrency: 'PLN',
   ),
 };
 

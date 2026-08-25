@@ -58,4 +58,28 @@ void main() {
     expect(saved!.valutaDefault, 'JPY');
     expect(saved!.createdAt, initial.createdAt);
   });
+
+  testWidgets('lingua dropdown offers polish', (tester) async {
+    await pump(tester, onSave: (t) async {});
+
+    await tester.tap(find.byKey(const Key('campo-lingua')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Polacco'), findsWidgets);
+  });
+
+  testWidgets('saves the selected lingua default', (tester) async {
+    Trasferta? saved;
+    await pump(tester, onSave: (t) async => saved = t);
+
+    await tester.enterText(find.byKey(const Key('campo-nome')), 'Kraków Q3');
+    await tester.tap(find.byKey(const Key('campo-lingua')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Polacco').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Salva'));
+    await tester.pumpAndSettle();
+
+    expect(saved!.linguaDefault, 'pl');
+  });
 }

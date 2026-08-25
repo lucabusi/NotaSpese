@@ -18,7 +18,7 @@ class ParsedReceipt {
   final String? valuta; // ISO 4217; null → il form usa valuta_default trasferta
   final DateTime? data; // null → il form mette oggi
   final String? fornitore;
-  final String? lingua; // 'it'|'en'|'ja'|'sr'|'de'
+  final String? lingua; // 'it'|'en'|'ja'|'sr'|'de'|'pl'
   final OcrEngine engine;
   final String rawText;
 

@@ -11,6 +11,7 @@ const _lingue = <String?, String>{
   'ja': 'Giapponese',
   'sr': 'Serbo',
   'de': 'Tedesco',
+  'pl': 'Polacco',
 };
 
 /// Create/edit trip form. [initial] == null → create; otherwise edit

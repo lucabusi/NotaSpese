@@ -11,7 +11,7 @@ import 'ocr_service.dart';
 /// japanese include comunque i caratteri latini, quindi importi e date
 /// restano leggibili.
 class MlkitOcrService implements OcrService {
-  /// `linguaHint` = `Trasferta.linguaDefault` (`it|en|ja|sr|de`, NULL = auto).
+  /// `linguaHint` = `Trasferta.linguaDefault` (`it|en|ja|sr|de|pl`, NULL = auto).
   /// Solo il giapponese ha un modello dedicato tra le lingue supportate: il
   /// serbo cirillico non è coperto da ML Kit v2 (resta sul percorso Claude).
   static TextRecognitionScript scriptFor(String? linguaHint) =>

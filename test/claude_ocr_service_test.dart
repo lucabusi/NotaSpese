@@ -80,6 +80,9 @@ void main() {
     final schema = format['schema'] as Map;
     expect(schema['additionalProperties'], false);
     expect(schema['required'], containsAll(['importo', 'valuta', 'data', 'fornitore', 'lingua']));
+    final linguaSchema =
+        (schema['properties'] as Map)['lingua'] as Map<String, dynamic>;
+    expect(linguaSchema['enum'], containsAll(['it', 'en', 'ja', 'sr', 'de', 'pl']));
 
     // Response mapping.
     expect(result.engine, OcrEngine.claude);

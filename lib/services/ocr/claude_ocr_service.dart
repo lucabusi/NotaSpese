@@ -28,7 +28,7 @@ const Map<String, dynamic> _receiptSchema = {
     'fornitore': {'type': ['string', 'null']},
     'lingua': {
       'type': ['string', 'null'],
-      'enum': ['it', 'en', 'ja', 'sr', 'de', null],
+      'enum': ['it', 'en', 'ja', 'sr', 'de', 'pl', null],
     },
   },
   'required': ['importo', 'valuta', 'data', 'fornitore', 'lingua'],
