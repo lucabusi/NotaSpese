@@ -248,6 +248,31 @@ void main() {
     });
   });
 
+  group('extractAmount - alphanumeric code tails vs misread ¥ glyph', () {
+    // Misura ML Kit reale 2026-08-25 su 53 scontrini: il segno ¥ viene letto
+    // come una lettera latina isolata (F/Y) su 13 scontrini. Il totale non
+    // deve essere scartato come coda di un codice alfanumerico.
+    test('JA: ¥ misread as F still yields the keyword total', () {
+      const text = '小計 495\n合計 F544';
+      expect(extractAmount(text, languageProfiles['ja']!), 544.0);
+    });
+
+    test('JA: ¥ misread as Y still yields the keyword total', () {
+      const text = '小計/ 8点 Y1,626\nお買上計 Y1,626';
+      expect(extractAmount(text, languageProfiles['ja']!), 1626.0);
+    });
+
+    test('JA: terminal code ARC00 is still not an amount', () {
+      const text = 'AID Visa Debit ARC00';
+      expect(extractAmount(text, languageProfiles['ja']!), null);
+    });
+
+    test('JA: registration number T9021001013831 is still not an amount', () {
+      const text = '登録事業者番号：T9021001013831';
+      expect(extractAmount(text, languageProfiles['ja']!), null);
+    });
+  });
+
   group('extractDate', () {
     test('IT: dd/MM/yyyy format extracted', () {
       final now = DateTime(2026, 7, 18);

@@ -185,7 +185,10 @@
 - [x] Trascrizioni pulite: **216/216 = 100%** (importo 54/54, data 54/54, valuta 54/54, fornitore 54/54)
 - [x] Testo degradato ML Kit, 40 seed x 54 scontrini: **8635/8640 = 99,9%** (5 KO residui, tutti fornitore: banner reclutamento fuso in JP_49, nome perso in 2 seed su JP_25)
 - [x] `flutter test` verde (467 test) + `flutter analyze` zero issue
-- [ ] **Non verificato**: accuratezza con OCR ML Kit reale — richiede device Android collegato (`integration_test/mlkit_ocr_accuracy_test.dart`, ora bundla tutte e 53 le foto). Ultima misura reale disponibile: 96,4% su 14 scontrini (v0.9.3, 2026-07-22)
+- [x] **Accuratezza con OCR ML Kit reale, misurata 2026-08-25** (device OnePlus CPH2173, `integration_test/mlkit_ocr_accuracy_test.dart` sulle 53 foto): charAcc media **77,2%**, field accuracy **179/212 = 84,4%** (importo 47/53, data 51/53, valuta 51/53, fornitore 30/53). La misura sul testo pulito e su quello degradato sopravvalutava: il testo ML Kit vero è molto più rumoroso del modello.
+- [x] **Regressione trovata dal confronto A/B col parser pre-hardening** (`52b46c4`, stesso testo ML Kit rigiocato): l'hardening di `55d2a2a` aveva portato l'importo da **46/53 a 43/53**. Causa radice: `_isCodeTail` (introdotta per scartare `ARC00`/`T9021001013831`) rifiutava ogni cifra preceduta da lettera latina, ma ML Kit rende il segno `¥` come una **`Y` o `F` isolata** (`合計 F544`, `お買上計 Y1,626`) su 13 scontrini su 53: il totale veniva scartato e il fallback pescava la cifra sbagliata. Fix in `receipt_parser.dart` (v0.14.1): una `Y`/`F` isolata prima delle cifre è un glifo valuta, non un prefisso di codice; i codici veri restano esclusi (test di regressione in `receipt_parser_test.dart`). Importo **43 → 47/53**, totale **179/212 = 84,4%**, verificato di nuovo sul device.
+- [x] Regola `¥`→`Y`/`F` aggiunta al modello di rumore di `real_receipts_noise_accuracy_test.dart`: era l'errore sistematico che mancava, ed è il motivo per cui il gate al 99,9% non vedeva la regressione. Verificato che senza il fix la suite rumorosa ora fallisce.
+- [ ] Importo ancora KO su 6 scontrini (JP_32/40/43/49/50/51), **già KO prima dell'hardening**: cifra iniziale persa o fusa dall'OCR (`178` per `1,780`, `780` per `17,780`). Da attaccare con la geometria (colonna del totale), non con altre regex.
 
 ## Fase 6d — Crop immagine post-scatto ▢
 

@@ -168,12 +168,26 @@ bool _isPercentToken(String line, RegExpMatch match) =>
 
 final RegExp _latinLetter = RegExp(r'[A-Za-z_]');
 
+final RegExp _codeBodyChar = RegExp(r'[A-Za-z0-9_]');
+
+/// Whether the latin letter at [index] is really a `¥` sign misread by ML Kit
+/// (`合計 F544`, `お買上計 Y1,626`): misura on-device 2026-08-25, 13 scontrini
+/// su 53. A currency glyph stands alone right before the digits, while a code
+/// prefix is part of a longer alphanumeric run (`ARC00`). The registration
+/// number `T9021001013831` is also a lone letter, hence the restriction to the
+/// two glyphs ML Kit actually substitutes for `¥`.
+bool _isYenGlyphLetter(String line, int index) =>
+    (line[index] == 'Y' || line[index] == 'F') &&
+    (index == 0 || !_codeBodyChar.hasMatch(line[index - 1]));
+
 /// Whether the number [match] is the digit tail of an alphanumeric code
 /// (`ARC00`, `No.7837754670001`, `T9021001013831`, `SEQ No 01`) rather than an
 /// amount: on receipts an amount is always separated from its label, while
 /// terminal/approval/registration codes glue their digits to latin letters.
 bool _isCodeTail(String line, RegExpMatch match) =>
-    match.start > 0 && _latinLetter.hasMatch(line[match.start - 1]);
+    match.start > 0 &&
+    _latinLetter.hasMatch(line[match.start - 1]) &&
+    !_isYenGlyphLetter(line, match.start - 1);
 
 /// Whether [match] is one half of a clock reading (`17:38`): the amount
 /// extractor must not mistake a printed time for a total. A colon that merely

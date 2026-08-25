@@ -118,6 +118,7 @@ void main() {
 }
 
 final RegExp _katakana = RegExp(r'[ァ-ヺ]');
+final RegExp _yenSign = RegExp(r'[¥￥]');
 final RegExp _groupedAmount = RegExp(r'[¥￥](\d{1,3}(?:,\d{3})+)');
 final RegExp _thousands = RegExp(r'(\d),(\d{3})');
 final RegExp _kanaLongVowel = RegExp(r'(?<=[ァ-ヺ])ー(?=[ァ-ヺ])');
@@ -137,10 +138,18 @@ String degradeLikeMlkit(String text, {required int seed}) {
   for (var i = 0; i < lines.length; i++) {
     var line = lines[i];
 
-    // 1. The `¥` glyph read as a `4` glued to the amount (`¥6,775` → `46,775`).
+    // 1. The `¥` glyph read as a lone latin `Y`/`F` (`合計 F544`,
+    //    `お買上計 Y1,626`): 13 of the 53 receipts in the on-device measure of
+    //    2026-08-25. Applied before rule 2 because the two readings of the
+    //    same glyph are alternatives.
+    if (rnd.nextInt(3) == 0) {
+      line = line.replaceAll(_yenSign, rnd.nextBool() ? 'Y' : 'F');
+    }
+
+    // 2. The `¥` glyph read as a `4` glued to the amount (`¥6,775` → `46,775`).
     line = line.replaceAllMapped(_groupedAmount, (m) => '4${m.group(1)}');
 
-    // 2. Thousands group split after the comma (`¥1, 489`) — about half the
+    // 3. Thousands group split after the comma (`¥1, 489`) — about half the
     //    time, as measured.
     if (rnd.nextBool()) {
       line = line.replaceAllMapped(
@@ -149,37 +158,37 @@ String degradeLikeMlkit(String text, {required int seed}) {
       );
     }
 
-    // 3. Katakana long vowel read as an ASCII hyphen (`ヨ-クベニマル`).
+    // 4. Katakana long vowel read as an ASCII hyphen (`ヨ-クベニマル`).
     line = line.replaceAll(_kanaLongVowel, '-');
 
-    // 4. Latin O read as the CJK 口 (`LAWS口N`).
+    // 5. Latin O read as the CJK 口 (`LAWS口N`).
     line = line.replaceAll(_latinO, '口');
 
-    // 5. 加 read as カ on the fixed card-slip label.
+    // 6. 加 read as カ on the fixed card-slip label.
     line = line.replaceAll('加盟店', 'カ盟店');
 
-    // 6. A latin-only logo line comes out garbled with a `#` (`HARD-oF#`).
+    // 7. A latin-only logo line comes out garbled with a `#` (`HARD-oF#`).
     if (i == 0 && _latinOnly.hasMatch(line) && line.trim().isNotEmpty) {
       line = '${line.trim()}#';
     }
 
-    // 7. Punctuation dust in front of a name line (`·健太鼓子`).
+    // 8. Punctuation dust in front of a name line (`·健太鼓子`).
     if (i > 0 && i < 4 && rnd.nextInt(4) == 0 && line.trim().isNotEmpty) {
       line = '·${line.trim()}';
     }
 
-    // 8. A stray latin letter from the logo glued to a katakana name.
+    // 9. A stray latin letter from the logo glued to a katakana name.
     if (i > 0 && i < 4 && rnd.nextInt(5) == 0 && _katakana.hasMatch(line)) {
       line = 'K${line.trimLeft()}';
     }
 
-    // 9. Full-width output, as on taxi/POS terminals.
+    // 10. Full-width output, as on taxi/POS terminals.
     if (rnd.nextInt(6) == 0) line = _toFullWidth(line);
 
     out.add(line);
   }
 
-  // 10. Row clustering merges two printed rows that overlap vertically.
+  // 11. Row clustering merges two printed rows that overlap vertically.
   final merged = <String>[];
   for (var i = 0; i < out.length; i++) {
     if (i + 1 < out.length &&
